@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	exchange "github.com/blampe/go-coinbase-exchange"
+	exchange "github.com/blampe/dcagdax/coinbase"
 	"go.uber.org/zap"
 )
 

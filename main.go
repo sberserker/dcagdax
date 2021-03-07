@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gopkg.in/alecthomas/kingpin.v2"
 
-	exchange "github.com/blampe/go-coinbase-exchange"
+	exchange "github.com/blampe/dcagdax/coinbase"
 )
 
 var (
