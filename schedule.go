@@ -69,9 +69,9 @@ func newGdaxSchedule(
 	return &schedule, nil
 }
 
-func roundFloat(f float64, places int) (float64) {
-    shift := math.Pow(10, float64(places))
-    return math.Floor(f * shift + .5) / shift;
+func roundFloat(f float64, places int) float64 {
+	shift := math.Pow(10, float64(places))
+	return math.Floor(f*shift+.5) / shift
 }
 
 // Sync initiates trades & funding with a DCA strategy.
@@ -119,10 +119,13 @@ func (s *gdaxSchedule) Sync() error {
 			)
 			if s.autoFund {
 				s.logger.Infow(
-					"TODO: Creating a transfer request for $%.02f",
+					"Creating a transfer request for $%.02f",
 					"needed", needed,
 				)
-				s.makeDeposit(needed)
+				err := s.makeDeposit(needed)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -159,7 +162,7 @@ func (s *gdaxSchedule) minimumUSDPurchase() (float64, error) {
 
 	for _, p := range products {
 		if p.BaseCurrency == s.coin {
-			return math.Max(p.BaseMinSize * ticker.Price, 1.0), nil
+			return math.Max(p.BaseMinSize*ticker.Price, 1.0), nil
 		}
 	}
 
@@ -225,6 +228,10 @@ func (s *gdaxSchedule) additionalUsdNeeded() (float64, error) {
 
 			// This transfer is stil pending, so count it.
 			if unprocessed && notCanceled {
+				s.logger.Infow(
+					"Deposit is in progress",
+					"amount", t.Amount,
+				)
 				dollarsInbound += t.Amount
 			}
 		}
@@ -293,7 +300,57 @@ func (s *gdaxSchedule) makeDeposit(amount float64) error {
 	// TODO: Initiate funding for this amount. Need to add
 	// /deposits/payment-method support to client and
 	// client.CreateTransfer(...)
-	return skippedForDebug
+
+	// usdAccount, err := s.accountFor("USD")
+
+	// if err != nil {
+	// 	return err
+	// }
+
+	paymentMethods, err := s.client.ListPaymentMethods()
+
+	if err != nil {
+		return err
+	}
+
+	var bankAccount *exchange.PaymentMethod = nil
+
+	for _, p := range paymentMethods {
+		if p.Type == "ach_bank_account" {
+			bankAccount = &p
+		}
+	}
+
+	if bankAccount == nil {
+		return errors.New("No ACH bank account found on this account")
+	}
+
+	depositResponse, err := s.client.Deposit(exchange.DepositParams{
+		Amount:          amount,
+		Currency:        "USD",
+		PaymentMethodID: bankAccount.ID,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	s.logger.Infow(
+		"Deposit initiated successfully",
+		"payout", depositResponse.PayoutAt,
+	)
+
+	// transfer := exchange.Transfer{
+	// 	Type:   "deposit",
+	// 	Amount: amount,
+	// }
+
+	// _, err := s.client.CreateTransfer(&transfer)
+	// if err != nil {
+	// 	return err
+	// }
+
+	return nil
 }
 
 func (s *gdaxSchedule) accountFor(currencyCode string) (*exchange.Account, error) {
