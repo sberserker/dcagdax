@@ -6,6 +6,7 @@ Added the following features
 - automatic deposits
 - fixed ledger api dependency package. Had to move the package inside as well
 - added percentage buys
+- added force flag to buy now regardless if the window check, will ask for comfirmation
 
 ## Setup
 
