@@ -1,9 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"log"
 	"math"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	exchange "github.com/blampe/dcagdax/coinbase"
@@ -21,7 +26,8 @@ type gdaxSchedule struct {
 	every    time.Duration
 	until    time.Time
 	autoFund bool
-	coin     string
+	coins    map[string]float64
+	force    bool
 }
 
 func newGdaxSchedule(
@@ -32,7 +38,8 @@ func newGdaxSchedule(
 	usd float64,
 	every time.Duration,
 	until time.Time,
-	coin string,
+	coins []string,
+	force bool,
 ) (*gdaxSchedule, error) {
 	schedule := gdaxSchedule{
 		logger: l,
@@ -43,28 +50,46 @@ func newGdaxSchedule(
 		every:    every,
 		until:    until,
 		autoFund: autoFund,
-		coin:     coin,
+		coins:    map[string]float64{},
+		force:    force,
 	}
 
-	minimum, err := schedule.minimumUSDPurchase()
+	total := 0
 
-	if err != nil {
-		return nil, err
+	for _, c := range coins {
+		arr := strings.Split(c, ":")
+		coin := arr[0]
+		percentage, err := strconv.Atoi(arr[1])
+		if err != nil {
+			return &schedule, err
+		}
+
+		total += int(percentage)
+
+		minimum, err := schedule.minimumUSDPurchase(coin)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if schedule.usd == 0.0 {
+			schedule.usd = minimum + 0.1
+		}
+
+		scheduledForCoin := roundFloat(schedule.usd*float64(percentage)/100, 8)
+		schedule.coins[coin] = scheduledForCoin
+
+		if scheduledForCoin < minimum {
+			return nil, fmt.Errorf(
+				"Coinbase minimum %s trade amount is $%.02f, but you're trying to purchase $%f",
+				coin, minimum, scheduledForCoin,
+			)
+		}
 	}
 
-	if schedule.usd == 0.0 {
-		schedule.usd = minimum + 0.1
+	if total != 100 {
+		return nil, fmt.Errorf("selected percentage must be exactly 100, provided %d", total)
 	}
-
-	if schedule.usd < minimum {
-		return nil, errors.New(fmt.Sprintf(
-			"GDAX's minimum %s trade amount is $%.02f, but you're trying to purchase $%f",
-			schedule.coin, minimum, schedule.usd,
-		))
-	}
-
-	// GDAX has a limit of 8 decimal places.
-	schedule.usd = roundFloat(schedule.usd, 8)
 
 	return &schedule, nil
 }
@@ -94,10 +119,17 @@ func (s *gdaxSchedule) Sync() error {
 		"until", until.String(),
 	)
 
-	if time, err := s.timeToPurchase(); err != nil {
-		return err
-	} else if !time {
-		return errors.New("Detected a recent purchase, waiting for next purchase window")
+	if s.force != true {
+		if time, err := s.timeToPurchase(); err != nil {
+			return err
+		} else if !time {
+			return errors.New("Detected a recent purchase, waiting for next purchase window")
+		}
+	} else {
+		c := askForConfirmation("Force method is used proceed?")
+		if !c {
+			return errors.New("User regected the trade")
+		}
 	}
 
 	if funded, err := s.sufficientUsdAvailable(); err != nil {
@@ -122,9 +154,14 @@ func (s *gdaxSchedule) Sync() error {
 					"Creating a transfer request for $%.02f",
 					"needed", needed,
 				)
-				err := s.makeDeposit(needed)
-				if err != nil {
-					return err
+
+				if s.debug != true {
+					err := s.makeDeposit(needed)
+					if err != nil {
+						return err
+					}
+				} else {
+					s.logger.Infow("Deposit skipped for debug")
 				}
 			}
 		}
@@ -133,21 +170,23 @@ func (s *gdaxSchedule) Sync() error {
 
 	s.logger.Infow(
 		"Placing an order",
-		"coin", s.coin,
+		"coins", s.coins,
 		"purchaseCurrency", "USD",
 		"purchaseAmount", s.usd,
 	)
 
-	productId := s.coin + "-" + "USD"
-	if err := s.makePurchase(productId); err != nil {
-		s.logger.Warn(err)
+	for coin, amount := range s.coins {
+		productId := coin + "-" + "USD"
+		if err := s.makePurchase(productId, amount); err != nil {
+			s.logger.Warn(err)
+		}
 	}
 
 	return nil
 }
 
-func (s *gdaxSchedule) minimumUSDPurchase() (float64, error) {
-	productId := s.coin + "-" + "USD"
+func (s *gdaxSchedule) minimumUSDPurchase(coin string) (float64, error) {
+	productId := coin + "-" + "USD"
 	ticker, err := s.client.GetTicker(productId)
 
 	if err != nil {
@@ -161,7 +200,7 @@ func (s *gdaxSchedule) minimumUSDPurchase() (float64, error) {
 	}
 
 	for _, p := range products {
-		if p.BaseCurrency == s.coin {
+		if p.BaseCurrency == coin {
 			return math.Max(p.BaseMinSize*ticker.Price, 1.0), nil
 		}
 	}
@@ -243,8 +282,13 @@ func (s *gdaxSchedule) additionalUsdNeeded() (float64, error) {
 }
 
 func (s *gdaxSchedule) timeSinceLastPurchase() (time.Duration, error) {
+	coins := make([]string, 0, len(s.coins))
+	for k := range s.coins {
+		coins = append(coins, k)
+	}
+
 	var transactions []exchange.LedgerEntry
-	account, err := s.accountFor(s.coin)
+	account, err := s.accountFor(coins[0]) //taking the first coins a marker, make sure to put your main coin first
 	if err != nil {
 		return 0, err
 	}
@@ -270,7 +314,7 @@ func (s *gdaxSchedule) timeSinceLastPurchase() (time.Duration, error) {
 	return now.Sub(lastTransactionTime), nil
 }
 
-func (s *gdaxSchedule) makePurchase(productId string) error {
+func (s *gdaxSchedule) makePurchase(productId string, amount float64) error {
 	if s.debug {
 		return skippedForDebug
 	}
@@ -280,7 +324,7 @@ func (s *gdaxSchedule) makePurchase(productId string) error {
 			ProductId: productId,
 			Type:      "market",
 			Side:      "buy",
-			Funds:     s.usd,
+			Funds:     amount, // Coinbase has a limit of 8 decimal places.
 		},
 	)
 
@@ -290,6 +334,7 @@ func (s *gdaxSchedule) makePurchase(productId string) error {
 
 	s.logger.Infow(
 		"Placed order",
+		"productId", productId,
 		"orderId", order.Id,
 	)
 
@@ -297,16 +342,6 @@ func (s *gdaxSchedule) makePurchase(productId string) error {
 }
 
 func (s *gdaxSchedule) makeDeposit(amount float64) error {
-	// TODO: Initiate funding for this amount. Need to add
-	// /deposits/payment-method support to client and
-	// client.CreateTransfer(...)
-
-	// usdAccount, err := s.accountFor("USD")
-
-	// if err != nil {
-	// 	return err
-	// }
-
 	paymentMethods, err := s.client.ListPaymentMethods()
 
 	if err != nil {
@@ -340,16 +375,6 @@ func (s *gdaxSchedule) makeDeposit(amount float64) error {
 		"payout", depositResponse.PayoutAt,
 	)
 
-	// transfer := exchange.Transfer{
-	// 	Type:   "deposit",
-	// 	Amount: amount,
-	// }
-
-	// _, err := s.client.CreateTransfer(&transfer)
-	// if err != nil {
-	// 	return err
-	// }
-
 	return nil
 }
 
@@ -365,5 +390,26 @@ func (s *gdaxSchedule) accountFor(currencyCode string) (*exchange.Account, error
 		}
 	}
 
-	return nil, errors.New(fmt.Sprintf("No %s wallet on this account", currencyCode))
+	return nil, fmt.Errorf("No %s wallet on this account", currencyCode)
+}
+
+func askForConfirmation(s string) bool {
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		fmt.Printf("%s [y/n]: ", s)
+
+		response, err := reader.ReadString('\n')
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		response = strings.ToLower(strings.TrimSpace(response))
+
+		if response == "y" || response == "yes" {
+			return true
+		} else if response == "n" || response == "no" {
+			return false
+		}
+	}
 }

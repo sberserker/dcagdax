@@ -29,13 +29,14 @@ usage: dcagdax --every=EVERY [<flags>]
 Flags:
   --help         Show context-sensitive help (also try --help-long and
                  --help-man).
-  --coin=BTC     Which coin you want to buy: BTC, LTC, BCH or ETH (default 'BTC').
+  --coin=BTC     Which coin you want to buy: BTC, LTC, BCH or ETH : percentage amount. Can be split between multipe coins. Total must be 100%. Example --coin BTC:70 --coin ETH:30
   --every=EVERY  How often to make purchases, e.g. 1h, 7d, 3w.
   --usd=USD      How much USD to spend on each purchase. If unspecified, the
                  minimum purchase amount allowed will be used.
   --until=UNTIL  Stop executing trades after this date, e.g. 2017-12-31.
   --trade        Actually execute trades.
   --autofund     Automatically initiate ACH deposits.
+  --force        Force trade despite trading windows, will ask for user confirmation
   --version      Show application version.
 ```
 

@@ -14,10 +14,10 @@ import (
 )
 
 var (
-	coin = kingpin.Flag(
+	coins = kingpin.Flag(
 		"coin",
-		"Which coin you want to buy: BTC, LTC, BCH or ETH (default 'BTC').",
-	).Default("BTC").Enum("BTC", "ETH", "LTC", "BCH")
+		"Which coin you want to buy: BTC, LTC, BCH.",
+	).Strings()
 
 	every = registerGenerousDuration(kingpin.Flag(
 		"every",
@@ -43,6 +43,11 @@ var (
 		"autofund",
 		"Automatically initiate ACH deposits.",
 	).Bool()
+
+	force = kingpin.Flag(
+		"force",
+		"Execute trade regardless of the window. Use with caution every run will execute the trade",
+	).Bool()
 )
 
 func main() {
@@ -65,11 +70,13 @@ func main() {
 	}
 	if key == "" {
 		logger.Warn("GDAX_KEY environment variable is required")
+		os.Exit(1)
 	} else {
 		os.Setenv("COINBASE_KEY", key)
 	}
 	if passphrase == "" {
 		logger.Warn("GDAX_PASSPHRASE environment variable is required")
+		os.Exit(1)
 	} else {
 		os.Setenv("COINBASE_PASSPHRASE", key)
 	}
@@ -84,7 +91,8 @@ func main() {
 		*usd,
 		*every,
 		*until,
-		*coin,
+		*coins,
+		*force,
 	)
 
 	if err != nil {
