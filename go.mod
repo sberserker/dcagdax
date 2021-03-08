@@ -1,4 +1,4 @@
-module github.com/blampe/dcagdax
+module github.com/sberserker/dcagdax
 
 go 1.13
 

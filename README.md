@@ -1,15 +1,20 @@
-# DCA GDAX
+# DCA Coinbase
 
 Automated dollar cost averaging for BTC, LTC, BCH and ETH on GDAX.
+Inspired by https://github.com/blampe/dcagdax
+Added the following features
+- automatic deposits
+- fixed ledger api dependency package. Had to move the package inside as well
+- added percentage buys
 
 ## Setup
 
 If you only have a Coinbase account you'll need to also sign into
-[GDAX](gdax.com). Make sure you have a bank account linked to one of these for
+[Coinbase](https://pro.coinbase.com/). Make sure you have a bank account linked to one of these for
 ACH transfers.
 
-Procure a GDAX API key for yourself by visiting
-[www.gdax.com/settings/api](https://www.gdax.com/settings/api). **Do not share
+Procure a Coinbase API key for yourself by visiting
+[https://pro.coinbase.com/profile/api](https://pro.coinbase.com/profile/api). **Do not share
 this API key with third parties!**
 
 ## Usage
@@ -17,7 +22,7 @@ this API key with third parties!**
 Build the binary:
 
 ```
-$ go build ./
+$ go build -o .  ./...
 ```
 
 Then run it:
@@ -75,12 +80,8 @@ as part of your deployment!
 
 **Q:** Can this auto-withdraw coins into a cold wallet?
 
-**A:** Not currently, but pull requests are welcome!
+**A:** Yes
 
 **Q:** Which coins can I purchase?
 
-**A:** We support all of GDAX's products: BTC, LTC, BCH and ETH.
-
-**Q:** Can I buy you a beer?
-
-**A:** BTC `13N2g3MedU2mc6TzQWEE7kBoTCj6Ajyzpw`
+**A:** We support all of Coinbase's products: BTC, LTC, BCH and ETH.

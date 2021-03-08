@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	exchange "github.com/blampe/dcagdax/coinbase"
+	exchange "github.com/sberserker/dcagdax/coinbase"
 	"go.uber.org/zap"
 )
 
