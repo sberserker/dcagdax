@@ -29,6 +29,11 @@ var (
 		"How much USD to spend on each purchase. If unspecified, the minimum purchase amount allowed will be used.",
 	).Float()
 
+	after = registerDate(kingpin.Flag(
+		"after",
+		"Start executing trades after this date, e.g. 2017-12-31.",
+	))
+
 	until = registerDate(kingpin.Flag(
 		"until",
 		"Stop executing trades after this date, e.g. 2017-12-31.",
@@ -91,6 +96,7 @@ func main() {
 		*usd,
 		*every,
 		*until,
+		*after,
 		*coins,
 		*force,
 	)

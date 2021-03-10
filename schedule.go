@@ -25,6 +25,7 @@ type gdaxSchedule struct {
 	usd      float64
 	every    time.Duration
 	until    time.Time
+	after    time.Time
 	autoFund bool
 	coins    map[string]float64
 	force    bool
@@ -38,6 +39,7 @@ func newGdaxSchedule(
 	usd float64,
 	every time.Duration,
 	until time.Time,
+	after time.Time,
 	coins []string,
 	force bool,
 ) (*gdaxSchedule, error) {
@@ -49,6 +51,7 @@ func newGdaxSchedule(
 		usd:      usd,
 		every:    every,
 		until:    until,
+		after:    after,
 		autoFund: autoFund,
 		coins:    map[string]float64{},
 		force:    force,
@@ -111,6 +114,10 @@ func (s *gdaxSchedule) Sync() error {
 
 	if now.After(until) {
 		return errors.New("Deadline has passed, not taking any action")
+	}
+
+	if !s.after.IsZero() && !now.After(s.after) {
+		return fmt.Errorf("Configured to start after %s, not taking any action", after)
 	}
 
 	s.logger.Infow("Dollar cost averaging",
