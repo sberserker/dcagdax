@@ -7,6 +7,7 @@ Added the following features
 - fixed ledger api dependency package. Had to move the package inside as well
 - added percentage buys
 - added force flag to buy now regardless of the window check, will ask for confirmation
+- added after flag
 
 ## Setup
 
