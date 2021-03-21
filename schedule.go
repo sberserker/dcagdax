@@ -180,16 +180,32 @@ func (s *gdaxSchedule) Sync() error {
 				)
 
 				if s.debug != true {
-					err := s.makeDeposit(needed)
+					payoutAt, err := s.makeDeposit(needed)
 					if err != nil {
 						return err
 					}
+
+					//calculate when money will available to buy and sleep
+					waitTime := payoutAt.Add(1 * time.Minute).Sub(time.Now())
+					if waitTime < 2*time.Minute {
+						s.logger.Infow(
+							"Sleeping for",
+							"minutes", waitTime.Minutes(),
+						)
+						time.Sleep(waitTime)
+					} else {
+						s.logger.Infow(
+							"Deposit money will ba available in. Exiting now",
+							"minutes", waitTime.Minutes(),
+						)
+						return nil
+					}
+
 				} else {
 					s.logger.Infow("Deposit skipped for debug")
 				}
 			}
 		}
-		return nil
 	}
 
 	s.logger.Infow(
@@ -369,11 +385,11 @@ func (s *gdaxSchedule) makePurchase(productId string, amount float64) error {
 	return nil
 }
 
-func (s *gdaxSchedule) makeDeposit(amount float64) error {
+func (s *gdaxSchedule) makeDeposit(amount float64) (*time.Time, error) {
 	paymentMethods, err := s.client.ListPaymentMethods()
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var bankAccount *exchange.PaymentMethod = nil
@@ -385,7 +401,7 @@ func (s *gdaxSchedule) makeDeposit(amount float64) error {
 	}
 
 	if bankAccount == nil {
-		return errors.New("No ACH bank account found on this account")
+		return nil, errors.New("No ACH bank account found on this account")
 	}
 
 	depositResponse, err := s.client.Deposit(exchange.DepositParams{
@@ -395,7 +411,7 @@ func (s *gdaxSchedule) makeDeposit(amount float64) error {
 	})
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	s.logger.Infow(
@@ -403,7 +419,8 @@ func (s *gdaxSchedule) makeDeposit(amount float64) error {
 		"payout", depositResponse.PayoutAt,
 	)
 
-	return nil
+	payoutAt := depositResponse.PayoutAt.Time()
+	return &payoutAt, nil
 }
 
 func (s *gdaxSchedule) accountFor(currencyCode string) (*exchange.Account, error) {
