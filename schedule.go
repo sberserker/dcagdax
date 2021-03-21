@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/big"
 	"os"
 	"strconv"
 	"strings"
@@ -100,6 +101,22 @@ func newGdaxSchedule(
 func roundFloat(f float64, places int) float64 {
 	shift := math.Pow(10, float64(places))
 	return math.Floor(f*shift+.5) / shift
+}
+
+//truncate cuts float to a provided precision
+func truncate(f float64, unit float64) float64 {
+	bf := big.NewFloat(0).SetPrec(1000).SetFloat64(f)
+	bu := big.NewFloat(0).SetPrec(1000).SetFloat64(unit)
+
+	bf.Quo(bf, bu)
+
+	// Truncate:
+	i := big.NewInt(0)
+	bf.Int(i)
+	bf.SetInt(i)
+
+	f, _ = bf.Mul(bf, bu).Float64()
+	return f
 }
 
 // Sync initiates trades & funding with a DCA strategy.
@@ -252,7 +269,11 @@ func (s *gdaxSchedule) additionalUsdNeeded() (float64, error) {
 		return 0, nil
 	}
 
-	dollarsNeeded := s.usd - usdAccount.Available
+	//account may have some fraction of cents from previous trading so cut everything after 0.01
+	//note cut only don't round
+	usdAvailable := truncate(usdAccount.Available, 0.01)
+
+	dollarsNeeded := s.usd - usdAvailable
 	if dollarsNeeded < 0 {
 		return 0, errors.New("Invalid account balance")
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	exchange "github.com/sberserker/dcagdax/coinbase"
@@ -59,7 +60,9 @@ func main() {
 	kingpin.Version("0.1.0")
 	kingpin.Parse()
 
-	l, _ := zap.NewProduction()
+	config := zap.NewProductionConfig()
+	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	l, _ := config.Build()
 	logger := l.Sugar()
 	defer logger.Sync()
 
