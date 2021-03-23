@@ -2,3 +2,5 @@ dcagdax
 vendor
 dcagdax.exe
 .vscode
+*.bat
+.env

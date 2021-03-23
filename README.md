@@ -41,6 +41,7 @@ Flags:
   --usd=USD      How much USD to spend on each purchase. If unspecified, the
                  minimum purchase amount allowed will be used.
   --until=UNTIL  Stop executing trades after this date, e.g. 2017-12-31.
+  --after=AFTER  Start executing trades after this date, e.g. 2017-12-31.
   --trade        Actually execute trades.
   --autofund     Automatically initiate ACH deposits.
   --force        Force trade despite trading windows, will ask for user confirmation
@@ -57,6 +58,27 @@ $ GDAX_SECRET=secret \
 
 Be aware that if you set your purchase amount near 0.01 BTC (the minimum trade
 amount) then an upswing in price might prevent you from trading.
+
+## Run in Docker
+The application can run in docker with cron. 
+Create env file with the following format
+```
+GDAX_SECRET=secret
+GDAX_KEY=key
+GDAX_PASSPHRASE=pass
+```
+Adjust cron.conf as you wish. Note this will run the cointainer in foreground. To detach: Ctrl+P+Q 
+Timezone is optionalal -e TZ=... and added for convenience by default cron will run in UTC timezone
+```
+docker build -t dcagdax .
+docker run -t -i --name dcagdax -e TZ=America/Los_Angeles  --env-file .env dcagdax
+```
+
+To stop and and remove
+```
+docker stop dcagdax
+docker rm -f dcagdax
+```
 
 ## FAQ
 
@@ -87,3 +109,8 @@ as part of your deployment!
 **Q:** Which coins can I purchase?
 
 **A:** We support all of Coinbase's products: BTC, LTC, BCH and ETH.
+
+**Q:** Can I buy you a beer?
+
+**A:** BTC 1KZhfEWkwH8A7L1Dm9MoHwUKkrEEHrFjgB
+
