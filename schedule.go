@@ -152,7 +152,7 @@ func (s *gdaxSchedule) Sync() error {
 	} else {
 		c := askForConfirmation("Force method is used proceed?")
 		if !c {
-			return errors.New("User regected the trade")
+			return errors.New("User rejected the trade")
 		}
 	}
 
@@ -255,6 +255,11 @@ func (s *gdaxSchedule) timeToPurchase() (bool, error) {
 		return false, err
 	}
 
+	s.logger.Infow(
+		"Time since last purchase hours",
+		"hours", timeSinceLastPurchase.Hours(),
+	)
+
 	if timeSinceLastPurchase.Seconds() < s.every.Seconds() {
 		// We purchased something recently, so hang tight.
 		return false, nil
@@ -354,6 +359,11 @@ func (s *gdaxSchedule) timeSinceLastPurchase() (time.Duration, error) {
 			}
 		}
 	}
+
+	s.logger.Infow(
+		"Last transaction time",
+		"time", lastTransactionTime.Local(),
+	)
 
 	return now.Sub(lastTransactionTime), nil
 }
