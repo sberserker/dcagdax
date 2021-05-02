@@ -404,9 +404,9 @@ func (s *gdaxSchedule) makeDeposit(amount float64) (*time.Time, error) {
 
 	var bankAccount *exchange.PaymentMethod = nil
 
-	for _, p := range paymentMethods {
-		if p.Type == "ach_bank_account" {
-			bankAccount = &p
+	for i := range paymentMethods {
+		if paymentMethods[i].Type == "ach_bank_account" {
+			bankAccount = &paymentMethods[i]
 		}
 	}
 
