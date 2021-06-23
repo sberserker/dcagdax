@@ -66,6 +66,15 @@ func main() {
 	logger := l.Sugar()
 	defer logger.Sync()
 
+	ftx, err := NewFtx()
+	if err != nil {
+		logger.Warn(err.Error())
+		os.Exit(1)
+	}
+
+	//ftx.MinimumPurchaseSize("BTC/USD")
+	ftx.GetAccountFiatValue("USD")
+
 	secret := os.Getenv("GDAX_SECRET")
 	key := os.Getenv("GDAX_KEY")
 	passphrase := os.Getenv("GDAX_PASSPHRASE")
