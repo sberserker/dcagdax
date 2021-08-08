@@ -12,8 +12,10 @@ import (
 	"strings"
 	"time"
 
-	exchange "github.com/sberserker/dcagdax/coinbase"
 	"go.uber.org/zap"
+
+	exchange "github.com/sberserker/dcagdax/coinbase"
+	"github.com/sberserker/dcagdax/exchanges"
 )
 
 var skippedForDebug = errors.New("Skipping because trades are not enabled")
@@ -33,6 +35,7 @@ type gdaxSchedule struct {
 }
 
 func newGdaxSchedule(
+	ex exchanges.Exchange,
 	c *exchange.Client,
 	l *zap.SugaredLogger,
 	debug bool,
@@ -150,10 +153,10 @@ func (s *gdaxSchedule) Sync() error {
 			return errors.New("Detected a recent purchase, waiting for next purchase window")
 		}
 	} else {
-		c := askForConfirmation("Force method is used proceed?")
-		if !c {
-			return errors.New("User rejected the trade")
-		}
+		// c := askForConfirmation("Force method is used proceed?")
+		// if !c {
+		// 	return errors.New("User rejected the trade")
+		// }
 	}
 
 	if funded, err := s.sufficientUsdAvailable(); err != nil {
@@ -294,7 +297,7 @@ func (s *gdaxSchedule) additionalUsdNeeded() (float64, error) {
 	//note cut only don't round
 	usdAvailable := truncate(usdAccount.Available, 0.01)
 
-	dollarsNeeded := s.usd - usdAvailable
+	dollarsNeeded := truncate(s.usd, 0.01) - usdAvailable
 	if dollarsNeeded < 0 {
 		return 0, errors.New("Invalid account balance")
 	}
@@ -327,7 +330,7 @@ func (s *gdaxSchedule) additionalUsdNeeded() (float64, error) {
 
 	// If our incoming transfers don't cover our purchase need then we'll need
 	// to cover that with an additional deposit.
-	return math.Max(dollarsNeeded-dollarsInbound, 0), nil
+	return truncate(math.Max(dollarsNeeded-dollarsInbound, 0), 0.01), nil
 }
 
 func (s *gdaxSchedule) timeSinceLastPurchase() (time.Duration, error) {

@@ -12,6 +12,7 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	exchange "github.com/sberserker/dcagdax/coinbase"
+	"github.com/sberserker/dcagdax/exchanges"
 )
 
 var (
@@ -66,14 +67,16 @@ func main() {
 	logger := l.Sugar()
 	defer logger.Sync()
 
-	ftx, err := NewFtx()
-	if err != nil {
-		logger.Warn(err.Error())
-		os.Exit(1)
-	}
+	/*
+			ftx, err := NewFtx()
+			if err != nil {
+				logger.Warn(err.Error())
+				os.Exit(1)
+			}
 
-	//ftx.MinimumPurchaseSize("BTC/USD")
-	ftx.GetAccountFiatValue("USD")
+		//ftx.MinimumPurchaseSize("BTC/USD")
+		ftx.GetAccountFiatValue("USD")
+	*/
 
 	secret := os.Getenv("GDAX_SECRET")
 	key := os.Getenv("GDAX_KEY")
@@ -100,7 +103,14 @@ func main() {
 
 	client := exchange.NewClient(secret, key, passphrase)
 
+	exchange, err := exchanges.NewCoinbase()
+	if err != nil {
+		logger.Error(err)
+		os.Exit(1)
+	}
+
 	schedule, err := newGdaxSchedule(
+		exchange,
 		client,
 		logger,
 		!*makeTrades,
