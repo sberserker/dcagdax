@@ -11,7 +11,6 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/alecthomas/kingpin.v2"
 
-	exchange "github.com/sberserker/dcagdax/coinbase"
 	"github.com/sberserker/dcagdax/exchanges"
 )
 
@@ -78,30 +77,9 @@ func main() {
 		ftx.GetAccountFiatValue("USD")
 	*/
 
-	secret := os.Getenv("GDAX_SECRET")
-	key := os.Getenv("GDAX_KEY")
-	passphrase := os.Getenv("GDAX_PASSPHRASE")
-
-	if secret == "" {
-		logger.Warn("GDAX_SECRET environment variable is required")
-		os.Exit(1)
-	} else {
-		os.Setenv("COINBASE_SECRET", secret)
-	}
-	if key == "" {
-		logger.Warn("GDAX_KEY environment variable is required")
-		os.Exit(1)
-	} else {
-		os.Setenv("COINBASE_KEY", key)
-	}
-	if passphrase == "" {
-		logger.Warn("GDAX_PASSPHRASE environment variable is required")
-		os.Exit(1)
-	} else {
-		os.Setenv("COINBASE_PASSPHRASE", key)
-	}
-
-	client := exchange.NewClient(secret, key, passphrase)
+	//gemini
+	gemini, err := exchanges.NewGemini()
+	gemini.Test()
 
 	exchange, err := exchanges.NewCoinbase()
 	if err != nil {
@@ -111,7 +89,6 @@ func main() {
 
 	schedule, err := newGdaxSchedule(
 		exchange,
-		client,
 		logger,
 		!*makeTrades,
 		*autoFund,

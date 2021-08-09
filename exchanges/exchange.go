@@ -1,19 +1,44 @@
 package exchanges
 
+import "time"
+
 type Exchange interface {
-	MinimumPurchaseSize(productId string) (float64, error)
+	GetTickerSymbol(baseCurrency string, quoteCurrency string) string
 
-	MakePurchase(productId string, amount float64) error
+	GetTicker(productId string) (*Ticker, error)
 
-	GetTicker(productId string)
+	GetProduct(productId string) (Product, error)
 
-	GetProducts() error
+	Deposit(currency string, amount float64) (*time.Time, error)
 
-	ListAccountTransfers(accountId string)
+	CreateOrder(productId string, amount float64) (Order, error)
 
-	ListAccountLedger(accountId string)
+	LastPurchaseTime(ticker string) (*time.Time, error)
 
-	CreateOrder(productId string, market string)
+	GetFiatAccount(currency string) (*Account, error)
 
-	Deposit(currency string, amount float64, bankId string)
+	GetPendingTransfers(currency string) ([]PendingTransfer, error)
+}
+
+type Order struct {
+	Symbol  string
+	OrderID string
+}
+
+type Ticker struct {
+	Price float64
+}
+
+type Product struct {
+	QuoteCurrency string
+	BaseCurrency  string
+	BaseMinSize   float64
+}
+
+type Account struct {
+	Available float64
+}
+
+type PendingTransfer struct {
+	Amount float64
 }

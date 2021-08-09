@@ -208,6 +208,14 @@ func (c *Client) GetProducts() ([]Product, error) {
 	return products, err
 }
 
+func (c *Client) GetProduct(productId string) (Product, error) {
+	var product Product
+
+	requestURL := fmt.Sprintf("/products/%s", productId)
+	_, err := c.Request("GET", requestURL, nil, &product)
+	return product, err
+}
+
 func (c *Client) GetHistoricRates(product string,
 	p ...GetHistoricRatesParams) ([]HistoricRate, error) {
 	var historicRates []HistoricRate

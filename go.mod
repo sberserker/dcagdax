@@ -8,10 +8,13 @@ require (
 	github.com/alecthomas/repr v0.0.0-20181024024818-d37bc2a10ba1 // indirect
 	github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc // indirect
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
+	github.com/claudiocandio/gemini-api v1.0.1 // indirect
 	github.com/grishinsana/goftx v1.2.1 // indirect
 	github.com/mattn/go-isatty v0.0.11 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/sergi/go-diff v1.1.0 // indirect
+	github.com/shopspring/decimal v1.2.0 // indirect
+	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/stretchr/testify v1.6.1 // indirect
 	go.uber.org/atomic v1.2.0 // indirect
 	go.uber.org/multierr v1.1.0 // indirect
