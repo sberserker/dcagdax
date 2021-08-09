@@ -77,6 +77,17 @@ docker build -t dcagdax .
 docker run -t -i --name dcagdax -e TZ=America/Los_Angeles  --env-file .env dcagdax
 ```
 
+Run docker with automatic start
+```
+docker run -t -i --name dcagdax -e TZ=America/Los_Angeles  --env-file .env --restart unless-stopped dcagdax
+``` 
+
+Follow container output
+```
+docker logs dcagdax --follow
+```
+
+
 To stop and and remove
 ```
 docker stop dcagdax

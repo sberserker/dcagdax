@@ -7,7 +7,8 @@ COPY go.sum .
 RUN go mod download
 
 COPY *.go .
-COPY coinbase coinbase
+COPY clients clients
+COPY exchanges exchanges
 
 RUN GOOS=linux GOARCH=amd64 go build -o /go/bin/  ./...
 
