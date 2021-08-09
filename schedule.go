@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"math/big"
 	"os"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/sberserker/dcagdax/exchanges"
+	"github.com/shopspring/decimal"
 )
 
 var skippedForDebug = errors.New("Skipping because trades are not enabled")
@@ -91,8 +91,8 @@ func newGdaxSchedule(
 			schedule.usd = minimum + 0.1
 		}
 
-		//there is change truncate will not work correctly example 100.5
-		scheduledForCoin := roundFloat(schedule.usd*float64(percentage)/100, 8)
+		//schedule.usd * percentage / 100
+		scheduledForCoin, _ := decimal.NewFromFloat(usd).Mul(decimal.NewFromFloat(float64(percentage))).Div(decimal.NewFromFloat(100)).Truncate(2).Float64()
 
 		order := orderDetails{
 			symbol: symbol,
@@ -114,27 +114,6 @@ func newGdaxSchedule(
 	}
 
 	return &schedule, nil
-}
-
-func roundFloat(f float64, places int) float64 {
-	shift := math.Pow(10, float64(places))
-	return math.Floor(f*shift+.5) / shift
-}
-
-//truncate cuts float to a provided precision
-func truncate(f float64, unit float64) float64 {
-	bf := big.NewFloat(0).SetPrec(1000).SetFloat64(f)
-	bu := big.NewFloat(0).SetPrec(1000).SetFloat64(unit)
-
-	bf.Quo(bf, bu)
-
-	// Truncate:
-	i := big.NewInt(0)
-	bf.Int(i)
-	bf.SetInt(i)
-
-	f, _ = bf.Mul(bf, bu).Float64()
-	return f
 }
 
 // Sync initiates trades & funding with a DCA strategy.
@@ -196,39 +175,31 @@ func (s *gdaxSchedule) Sync() error {
 			"needed", needed,
 		)
 
-		/*
-			if !s.autoFund {
-				return errors.New("No sufficient amount for trade and autofund is disabled. Deposit money to proceed")
-			}
+		if !s.autoFund {
+			return errors.New("No sufficient amount for trade and autofund is disabled. Deposit money to proceed")
+		}
 
-			payoutAt, err := s.fund(needed)
-			if err != nil {
-				return err
-			}
+		payoutAt, err := s.fund(needed)
+		if err != nil {
+			return err
+		}
 
-			//calculate when money will available to buy and sleep
-			waitTime := payoutAt.Add(1 * time.Minute).Sub(time.Now())
-			if waitTime < 2*time.Minute {
-				s.logger.Infow(
-					"Sleeping for",
-					"minutes", waitTime.Minutes(),
-				)
-				time.Sleep(waitTime)
-			} else {
-				s.logger.Infow(
-					"Deposit money will ba available in. Exiting now",
-					"minutes", waitTime.Minutes(),
-				)
-				return nil
-			}*/
+		//calculate when money will available to buy and sleep
+		waitTime := payoutAt.Add(1 * time.Minute).Sub(time.Now())
+		if waitTime < 2*time.Minute {
+			s.logger.Infow(
+				"Sleeping for",
+				"minutes", waitTime.Minutes(),
+			)
+			time.Sleep(waitTime)
+		} else {
+			s.logger.Infow(
+				"Deposit money will ba available in. Exiting now",
+				"minutes", waitTime.Minutes(),
+			)
+			return nil
+		}
 	}
-
-	// s.logger.Infow(
-	// 	"Placing an order",
-	// 	"coins", s.coins,
-	// 	"purchaseCurrency", Currency,
-	// 	"purchaseAmount", s.usd,
-	// )
 
 	for _, order := range s.coins {
 		s.logger.Infow(
@@ -300,16 +271,6 @@ func (s *gdaxSchedule) timeToPurchase() (bool, error) {
 	return true, nil
 }
 
-// func (s *gdaxSchedule) sufficientUsdAvailable() (bool, error) {
-// 	usdAccount, err := s.accountFor("USD")
-
-// 	if err != nil {
-// 		return false, err
-// 	}
-
-// 	return (usdAccount.Available >= s.usd), nil
-// }
-
 func (s *gdaxSchedule) additionalUsdNeeded() (float64, error) {
 	usdAccount, err := s.exchange.GetFiatAccount(Currency)
 	if err != nil {
@@ -320,42 +281,20 @@ func (s *gdaxSchedule) additionalUsdNeeded() (float64, error) {
 		return 0, nil
 	}
 
-	// if funded, err := s.sufficientUsdAvailable(); err != nil {
-	// 	return 0, err
-	// } else if funded {
-	// 	return 0, nil
-	// }
+	availableBalance := decimal.NewFromFloat(usdAccount.Available).Truncate(2)
+
+	s.logger.Infow(
+		"Avaialable balance",
+		"amount", availableBalance.String(),
+	)
 
 	//account may have some fraction of cents from previous trading so cut everything after 0.01
 	//note cut only don't round
 
-	dollarsNeeded := s.usd - usdAccount.Available
-	dollarsNeeded = truncate(dollarsNeeded, 0.01)
+	//s.usd - availableBalance
+	dollarsNeeded, _ := decimal.NewFromFloat(s.usd).Sub(availableBalance).Truncate(2).Float64()
 
 	return dollarsNeeded, nil
-
-	// // Dang, we don't have enough funds. Let's see if money is on the way.
-	// transfers, err := s.exchange.GetPendingTransfers("USD")
-	// if err != nil {
-	// 	return 0, err
-	// }
-	// if transfers == nil {
-	// 	return 0, nil
-	// }
-
-	// dollarsInbound := 0.0
-
-	// for _, t := range transfers {
-	// 	s.logger.Infow(
-	// 		"Deposit is in progress",
-	// 		"amount", t.Amount,
-	// 	)
-	// 	dollarsInbound += t.Amount
-	// }
-
-	// // If our incoming transfers don't cover our purchase need then we'll need
-	// // to cover that with an additional deposit.
-	// return truncate(math.Max(dollarsNeeded-dollarsInbound, 0), 0.01), nil
 }
 
 func (s *gdaxSchedule) pendingTransfers() (float64, error) {
@@ -434,21 +373,6 @@ func (s *gdaxSchedule) makeDeposit(amount float64) (*time.Time, error) {
 
 	return payoutAt, nil
 }
-
-// func (s *gdaxSchedule) accountFor(currencyCode string) (*exchange.Account, error) {
-// 	accounts, err := s.client.GetAccounts()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	for _, a := range accounts {
-// 		if a.Currency == currencyCode {
-// 			return &a, nil
-// 		}
-// 	}
-
-// 	return nil, fmt.Errorf("No %s wallet on this account", currencyCode)
-// }
 
 func askForConfirmation(s string) bool {
 	reader := bufio.NewReader(os.Stdin)
