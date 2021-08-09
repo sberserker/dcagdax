@@ -1,6 +1,6 @@
 # DCA Coinbase
 
-Automated dollar cost averaging for BTC, LTC, BCH and ETH on GDAX.
+Automated dollar cost averaging for BTC, LTC, BCH and ETH on Coinbase.
 Inspired by https://github.com/blampe/dcagdax
 Added the following features
 - automatic deposits
@@ -8,6 +8,9 @@ Added the following features
 - added percentage buys
 - added force flag to buy now regardless of the window check, will ask for confirmation
 - added after flag
+
+
+Potentially can support FTX and Gemini exchanges as implementation was abstracted but left unfinished due to both of the dont support bank deposit at the moment. 
 
 ## Setup
 
@@ -101,10 +104,6 @@ account & submitting market orders to exchange with BTC.
 **A:** You could run this as a periodic cronjob on your workstation or in the
 cloud. Just be sure your API key & secret are not made available to anyone else
 as part of your deployment!
-
-**Q:** Can this auto-withdraw coins into a cold wallet?
-
-**A:** Yes
 
 **Q:** Which coins can I purchase?
 

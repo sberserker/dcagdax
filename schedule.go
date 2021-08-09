@@ -147,10 +147,10 @@ func (s *gdaxSchedule) Sync() error {
 			return errors.New("Detected a recent purchase, waiting for next purchase window")
 		}
 	} else {
-		// c := askForConfirmation("Force method is used proceed?")
-		// if !c {
-		// 	return errors.New("User rejected the trade")
-		// }
+		c := askForConfirmation("Force method is used proceed?")
+		if !c {
+			return errors.New("User rejected the trade")
+		}
 	}
 
 	needed, err := s.additionalUsdNeeded()
@@ -289,8 +289,6 @@ func (s *gdaxSchedule) additionalUsdNeeded() (float64, error) {
 	)
 
 	//account may have some fraction of cents from previous trading so cut everything after 0.01
-	//note cut only don't round
-
 	//s.usd - availableBalance
 	dollarsNeeded, _ := decimal.NewFromFloat(s.usd).Sub(availableBalance).Truncate(2).Float64()
 
