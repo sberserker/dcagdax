@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	exchange "github.com/sberserker/dcagdax/coinbase"
+	exchange "github.com/sberserker/dcagdax/clients/coinbase"
 )
 
 type Coinbase struct {
