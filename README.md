@@ -10,7 +10,7 @@ Added the following features
 - added after flag
 
 
-Potentially can support FTX and Gemini exchanges as implementation was abstracted but left unfinished due to both of the dont support bank deposit at the moment. 
+Potentially can support FTX and Gemini exchanges as implementation was abstracted but left unfinished due to both of them dont support bank deposit at the moment. 
 
 ## Setup
 
