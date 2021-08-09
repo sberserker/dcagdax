@@ -66,21 +66,6 @@ func main() {
 	logger := l.Sugar()
 	defer logger.Sync()
 
-	/*
-			ftx, err := NewFtx()
-			if err != nil {
-				logger.Warn(err.Error())
-				os.Exit(1)
-			}
-
-		//ftx.MinimumPurchaseSize("BTC/USD")
-		ftx.GetAccountFiatValue("USD")
-	*/
-
-	//gemini
-	gemini, err := exchanges.NewGemini()
-	gemini.Test()
-
 	exchange, err := exchanges.NewCoinbase()
 	if err != nil {
 		logger.Error(err)
