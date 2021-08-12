@@ -6,6 +6,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+
 	"github.com/sberserker/dcagdax/clients/gemini"
 )
 
@@ -65,13 +68,35 @@ func (g *Gemini) GetProduct(productId string) (Product, error) {
 	}, nil
 }
 
-// func (g *Gemini) Deposit(currency string, amount float64) (*time.Time, error) {
+func (g *Gemini) Deposit(currency string, amount float64) (*time.Time, error) {
+	return nil, errors.New("gemini exchange bank deposit is not implemented")
+}
 
-// }
+func (g *Gemini) CreateOrder(productId string, amount float64) (Order, error) {
+	//gemini doesn't support market order type
+	//set limit order with high enough price to get filled
 
-// func (g *Gemini) CreateOrder(productId string, amount float64) (Order, error) {
+	ticker, err := g.client.TickerV2(productId)
+	if err != nil {
+		return Order{}, err
+	}
 
-// }
+	//add 2% to make order executed
+	price, _ := decimal.NewFromFloat(ticker.Ask + ticker.Ask*2/100).Truncate(2).Float64()
+	orderAmt, _ := decimal.NewFromFloat(amount / price).Truncate(8).Float64()
+
+	clientOrderID := uuid.New().String()
+
+	_, err = g.client.NewOrder(productId, clientOrderID, orderAmt, price, "Buy", nil)
+	if err != nil {
+		return Order{}, err
+	}
+
+	return Order{
+		Symbol:  productId,
+		OrderID: clientOrderID,
+	}, nil
+}
 
 func (g *Gemini) LastPurchaseTime(ticker string) (*time.Time, error) {
 	//past trades history for a given symbol
@@ -106,6 +131,7 @@ func (g *Gemini) GetFiatAccount(currency string) (*Account, error) {
 	for _, t := range balances {
 		if t.Currency == currency {
 			fiatBalance = &t
+			break
 		}
 	}
 

@@ -20,6 +20,11 @@ var (
 		"Which coin you want to buy: BTC, LTC, BCH.",
 	).Strings()
 
+	exchangeType = kingpin.Flag(
+		"exchange",
+		"Exchange coinbase, gemini, ftx. Default: coinbase",
+	).Default("coinbase").String()
+
 	every = registerGenerousDuration(kingpin.Flag(
 		"every",
 		"How often to make purchases, e.g. 1h, 7d, 3w.",
@@ -66,7 +71,7 @@ func main() {
 	logger := l.Sugar()
 	defer logger.Sync()
 
-	exchange, err := exchanges.NewCoinbase()
+	exchange, err := initExchange(*exchangeType)
 	if err != nil {
 		logger.Error(err)
 		os.Exit(1)
@@ -93,6 +98,18 @@ func main() {
 	if err := schedule.Sync(); err != nil {
 		logger.Warn(err.Error())
 	}
+}
+
+func initExchange(exType string) (exchange exchanges.Exchange, err error) {
+	switch exType {
+	case "coinbase":
+		exchange, err = exchanges.NewCoinbase()
+	case "gemini":
+		exchange, err = exchanges.NewGemini()
+	default:
+		return nil, fmt.Errorf("unsupported exchange %s", exType)
+	}
+	return exchange, err
 }
 
 type generousDuration time.Duration
