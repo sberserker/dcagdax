@@ -140,8 +140,10 @@ func (s *gdaxSchedule) Sync() error {
 		"until", until.String(),
 	)
 
+	since := now.Add(-*every)
+
 	if s.force != true {
-		if time, err := s.timeToPurchase(); err != nil {
+		if time, err := s.timeToPurchase(since); err != nil {
 			return err
 		} else if !time {
 			return errors.New("Detected a recent purchase, waiting for next purchase window")
@@ -251,11 +253,15 @@ func (s *gdaxSchedule) minimumUSDPurchase(productId string) (float64, error) {
 	return math.Max(product.BaseMinSize*ticker.Price, 1.0), nil
 }
 
-func (s *gdaxSchedule) timeToPurchase() (bool, error) {
-	timeSinceLastPurchase, err := s.timeSinceLastPurchase()
+func (s *gdaxSchedule) timeToPurchase(since time.Time) (bool, error) {
+	timeSinceLastPurchase, err := s.timeSinceLastPurchase(since)
 
 	if err != nil {
 		return false, err
+	}
+
+	if timeSinceLastPurchase == nil {
+		return true, nil
 	}
 
 	s.logger.Infow(
@@ -317,16 +323,24 @@ func (s *gdaxSchedule) pendingTransfers() (float64, error) {
 	return dollarsInbound, nil
 }
 
-func (s *gdaxSchedule) timeSinceLastPurchase() (time.Duration, error) {
+func (s *gdaxSchedule) timeSinceLastPurchase(since time.Time) (*time.Duration, error) {
 	coins := make([]string, 0, len(s.coins))
 	for k := range s.coins {
 		coins = append(coins, k)
 	}
 
-	lastPurchaseTime, err := s.exchange.LastPurchaseTime(coins[0]) //taking the first coins a marker, make sure to put your main coin first
+	lastPurchaseTime, err := s.exchange.LastPurchaseTime(coins[0], Currency, since) //taking the first coins a marker, make sure to put your main coin first
 
 	if err != nil {
-		return 0, err
+		return nil, err
+	}
+
+	if lastPurchaseTime == nil {
+		s.logger.Infow(
+			"No transactions found since",
+			"since", since.Local(),
+		)
+		return nil, nil
 	}
 
 	s.logger.Infow(
@@ -334,7 +348,8 @@ func (s *gdaxSchedule) timeSinceLastPurchase() (time.Duration, error) {
 		"time", lastPurchaseTime.Local(),
 	)
 
-	return time.Now().Sub(*lastPurchaseTime), nil
+	timeSinceLastPurchase := time.Now().Sub(*lastPurchaseTime)
+	return &timeSinceLastPurchase, nil
 }
 
 func (s *gdaxSchedule) makePurchase(productId string, amount float64) error {

@@ -114,7 +114,7 @@ func (c *Coinbase) Deposit(currency string, amount float64) (*time.Time, error) 
 	return &payoutAt, nil
 }
 
-func (c *Coinbase) LastPurchaseTime(coin string) (*time.Time, error) {
+func (c *Coinbase) LastPurchaseTime(coin string, currency string, since time.Time) (*time.Time, error) {
 	var transactions []exchange.LedgerEntry
 	account, err := c.accountFor(coin) //taking the first coins a marker, make sure to put your main coin first
 	if err != nil {

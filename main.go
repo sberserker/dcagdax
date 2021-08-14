@@ -106,6 +106,10 @@ func initExchange(exType string) (exchange exchanges.Exchange, err error) {
 		exchange, err = exchanges.NewCoinbase()
 	case "gemini":
 		exchange, err = exchanges.NewGemini()
+	case "ftxus":
+		exchange, err = exchanges.NewFtx(true)
+	case "ftx":
+		exchange, err = exchanges.NewFtx(false)
 	default:
 		return nil, fmt.Errorf("unsupported exchange %s", exType)
 	}

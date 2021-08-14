@@ -13,7 +13,7 @@ type Exchange interface {
 
 	CreateOrder(productId string, amount float64) (Order, error)
 
-	LastPurchaseTime(ticker string) (*time.Time, error)
+	LastPurchaseTime(ticker string, currency string, since time.Time) (*time.Time, error)
 
 	GetFiatAccount(currency string) (*Account, error)
 

@@ -98,7 +98,7 @@ func (g *Gemini) CreateOrder(productId string, amount float64) (Order, error) {
 	}, nil
 }
 
-func (g *Gemini) LastPurchaseTime(ticker string) (*time.Time, error) {
+func (g *Gemini) LastPurchaseTime(ticker string, currency string, since time.Time) (*time.Time, error) {
 	//past trades history for a given symbol
 	//they go in opposite order
 	args := gemini.Args{}
@@ -136,7 +136,7 @@ func (g *Gemini) GetFiatAccount(currency string) (*Account, error) {
 	}
 
 	if fiatBalance == nil {
-		return nil, fmt.Errorf("Cannot find %s balance", currency)
+		return nil, fmt.Errorf("Cannot find %s account", currency)
 	}
 
 	return &Account{Available: fiatBalance.Available}, nil
