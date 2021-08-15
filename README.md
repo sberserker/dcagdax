@@ -63,10 +63,25 @@ Flags:
 ```
 
 Run the `dcagdax` binary with an environment containing your API credentials:
+For Coinbase
 ```
-$ GDAX_SECRET=secret \
-  GDAX_KEY=key \
-  GDAX_PASSPHRASE=pass \
+$ COINBASE_SECRET=secret \
+  COINBASE_KEY=key \
+  COINBASE_PASSPHRASE=pass \
+  ./dcagdax --help
+```
+
+For Gemini
+```
+$ GEMINI_SECRET=secret \
+  GEMINI_KEY=key \
+  ./dcagdax --help
+```
+
+For Ftx/Ftx.us
+```
+$ FTX_SECRET=secret \
+  FTX_KEY=key \
   ./dcagdax --help
 ```
 
@@ -77,9 +92,9 @@ amount) then an upswing in price might prevent you from trading.
 The application can run in docker with cron. 
 Create env file with the following format
 ```
-GDAX_SECRET=secret
-GDAX_KEY=key
-GDAX_PASSPHRASE=pass
+COINBASE_SECRET=secret
+COINBASE_KEY=key
+COINBASE_PASSPHRASE=pass
 ```
 Adjust cron.conf as you wish. Note this will run the cointainer in foreground. To detach: Ctrl+P+Q 
 Timezone is optionalal -e TZ=... and added for convenience by default cron will run in UTC timezone
@@ -123,7 +138,7 @@ account & submitting market orders to exchange with BTC.
 
 **Q:** How should I deploy this?
 
-**A:** You could run this as a periodic cronjob on your workstation or in the
+**A:** You could run this as a periodic cronjob on your workstation or run inside docker container or in the
 cloud. Just be sure your API key & secret are not made available to anyone else
 as part of your deployment!
 

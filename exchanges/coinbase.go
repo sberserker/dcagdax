@@ -15,20 +15,20 @@ type Coinbase struct {
 }
 
 func NewCoinbase() (*Coinbase, error) {
-	secret := os.Getenv("GDAX_SECRET")
-	key := os.Getenv("GDAX_KEY")
-	passphrase := os.Getenv("GDAX_PASSPHRASE")
+	secret := os.Getenv("COINBASE_SECRET")
+	key := os.Getenv("COINBASE_KEY")
+	passphrase := os.Getenv("COINBASE_PASSPHRASE")
 
 	if secret == "" {
-		return nil, errors.New("GDAX_SECRET environment variable is required")
+		return nil, errors.New("COINBASE_SECRET environment variable is required")
 	}
 
 	if key == "" {
-		return nil, errors.New("GDAX_KEY environment variable is required")
+		return nil, errors.New("COINBASE_KEY environment variable is required")
 	}
 
 	if passphrase == "" {
-		return nil, errors.New("GDAX_PASSPHRASE environment variable is required")
+		return nil, errors.New("COINBASE_PASSPHRASE environment variable is required")
 	}
 
 	return &Coinbase{
