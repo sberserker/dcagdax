@@ -140,7 +140,7 @@ func (s *gdaxSchedule) Sync() error {
 	}
 
 	if !s.after.IsZero() && !now.After(s.after) {
-		return fmt.Errorf("Configured to start after %s, not taking any action", after)
+		return fmt.Errorf("Configured to start after %s, not taking any action", s.after)
 	}
 
 	s.logger.Infow("Dollar cost averaging",

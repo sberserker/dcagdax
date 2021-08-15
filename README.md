@@ -150,3 +150,11 @@ as part of your deployment!
 
 **A:** BTC 1KZhfEWkwH8A7L1Dm9MoHwUKkrEEHrFjgB
 
+## Development references
+
+### Unit tests
+Generate mocks
+```
+go generate ./...
+```
+
