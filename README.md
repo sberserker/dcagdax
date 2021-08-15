@@ -1,6 +1,6 @@
 # DCA Coinbase
 
-Automated dollar cost averaging for BTC, LTC, BCH and ETH on GDAX.
+Automated dollar cost averaging for BTC, LTC, BCH and ETH on Coinbase.
 Inspired by https://github.com/blampe/dcagdax
 Added the following features
 - automatic deposits
@@ -8,7 +8,18 @@ Added the following features
 - added percentage buys
 - added force flag to buy now regardless of the window check, will ask for confirmation
 - added after flag
+- added support for geminit and ftx/ftx.us exchanges
+- added limit order type support
 
+Note Ftx and Gemini do not support funding over api at the moment. Autofund periodically manually if you plan to use those exchanges.
+Ftx and Gemini do not support market order type. Use limit order type with the following flags to successfully execute trade. 
+```
+--type limit
+--spread % to increase ask price to accommodate possible price fluctuation when order is placed. Default: 1
+--fee % for exchange commission typically 0.1-0.5 for most exchanges depends on fee exchange and fee tier. Default 0.5
+```
+Limit order may spend a little less every purchase to accommodate spread and fee. 
+Unused portion will be left on exchange and included into a next order. 
 ## Setup
 
 If you only have a Coinbase account you'll need to also sign into
@@ -34,25 +45,43 @@ Then run it:
 usage: dcagdax --every=EVERY [<flags>]
 
 Flags:
-  --help         Show context-sensitive help (also try --help-long and
-                 --help-man).
-  --coin=BTC     Which coin you want to buy: BTC, LTC, BCH or ETH : percentage amount. Can be split between multipe coins. Total must be 100%. Example --coin BTC:70 --coin ETH:30
-  --every=EVERY  How often to make purchases, e.g. 1h, 7d, 3w.
-  --usd=USD      How much USD to spend on each purchase. If unspecified, the
-                 minimum purchase amount allowed will be used.
-  --until=UNTIL  Stop executing trades after this date, e.g. 2017-12-31.
-  --after=AFTER  Start executing trades after this date, e.g. 2017-12-31.
-  --trade        Actually execute trades.
-  --autofund     Automatically initiate ACH deposits.
-  --force        Force trade despite trading windows, will ask for user confirmation
-  --version      Show application version.
+  --help                 Show context-sensitive help (also try --help-long and--help-man).
+  --exchange="coinbase"  Exchange coinbase, gemini, ftx, ftxus. Default: coinbase
+  --coin=BTC             Which coin you want to buy: BTC, LTC, BCH or ETH : percentage amount. Can be split between multipe coins. Total must be 100%. Example --coin BTC:70 --coin ETH:30
+  --every=EVERY          How often to make purchases, e.g. 1h, 7d, 3w.
+  --usd=USD              How much USD to spend on each purchase. If unspecified, the
+                         minimum purchase amount allowed will be used.
+  --until=UNTIL          Stop executing trades after this date, e.g. 2017-12-31.
+  --after=AFTER          Start executing trades after this date, e.g. 2017-12-31.
+  --trade                Actually execute trades.
+  --autofund             Automatically initiate ACH deposits.
+  --force                Force trade despite trading windows, will ask for user confirmation
+  --type="market"        Order type market, limit. Default: market
+  --spread=1.0           Percentage to add above ask price to get limit order executed. Default: 1.0
+  --fee=0.5              Fee level to exclude from limit order amount. Default: 0.5
+  --version              Show application version.
 ```
 
 Run the `dcagdax` binary with an environment containing your API credentials:
+For Coinbase
 ```
-$ GDAX_SECRET=secret \
-  GDAX_KEY=key \
-  GDAX_PASSPHRASE=pass \
+$ COINBASE_SECRET=secret \
+  COINBASE_KEY=key \
+  COINBASE_PASSPHRASE=pass \
+  ./dcagdax --help
+```
+
+For Gemini
+```
+$ GEMINI_SECRET=secret \
+  GEMINI_KEY=key \
+  ./dcagdax --help
+```
+
+For Ftx/Ftx.us
+```
+$ FTX_SECRET=secret \
+  FTX_KEY=key \
   ./dcagdax --help
 ```
 
@@ -63,9 +92,9 @@ amount) then an upswing in price might prevent you from trading.
 The application can run in docker with cron. 
 Create env file with the following format
 ```
-GDAX_SECRET=secret
-GDAX_KEY=key
-GDAX_PASSPHRASE=pass
+COINBASE_SECRET=secret
+COINBASE_KEY=key
+COINBASE_PASSPHRASE=pass
 ```
 Adjust cron.conf as you wish. Note this will run the cointainer in foreground. To detach: Ctrl+P+Q 
 Timezone is optionalal -e TZ=... and added for convenience by default cron will run in UTC timezone
@@ -73,6 +102,17 @@ Timezone is optionalal -e TZ=... and added for convenience by default cron will 
 docker build -t dcagdax .
 docker run -t -i --name dcagdax -e TZ=America/Los_Angeles  --env-file .env dcagdax
 ```
+
+Run docker with automatic start
+```
+docker run -t -i --name dcagdax -e TZ=America/Los_Angeles  --env-file .env --restart unless-stopped dcagdax
+``` 
+
+Follow container output
+```
+docker logs dcagdax --follow
+```
+
 
 To stop and and remove
 ```
@@ -98,13 +138,9 @@ account & submitting market orders to exchange with BTC.
 
 **Q:** How should I deploy this?
 
-**A:** You could run this as a periodic cronjob on your workstation or in the
+**A:** You could run this as a periodic cronjob on your workstation or run inside docker container or in the
 cloud. Just be sure your API key & secret are not made available to anyone else
 as part of your deployment!
-
-**Q:** Can this auto-withdraw coins into a cold wallet?
-
-**A:** Yes
 
 **Q:** Which coins can I purchase?
 

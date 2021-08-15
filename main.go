@@ -11,10 +11,15 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/alecthomas/kingpin.v2"
 
-	exchange "github.com/sberserker/dcagdax/coinbase"
+	"github.com/sberserker/dcagdax/exchanges"
 )
 
 var (
+	exchangeType = kingpin.Flag(
+		"exchange",
+		"Exchange coinbase, gemini, ftx, ftxus. Default: coinbase",
+	).Default("coinbase").String()
+
 	coins = kingpin.Flag(
 		"coin",
 		"Which coin you want to buy: BTC, LTC, BCH.",
@@ -54,10 +59,25 @@ var (
 		"force",
 		"Execute trade regardless of the window. Use with caution every run will execute the trade",
 	).Bool()
+
+	orderType = kingpin.Flag(
+		"type",
+		"Order type market, limit. Default: market",
+	).Default("market").String()
+
+	orderSpread = kingpin.Flag(
+		"spread",
+		"Percentage to add above ask price to get limit order executed. Default: 1.0",
+	).Default("1.0").Float()
+
+	fee = kingpin.Flag(
+		"fee",
+		"Fee level to exclude from limit order amount. Default: 0.5",
+	).Default("0.5").Float()
 )
 
 func main() {
-	kingpin.Version("0.1.0")
+	kingpin.Version("0.1.1")
 	kingpin.Parse()
 
 	config := zap.NewProductionConfig()
@@ -66,37 +86,32 @@ func main() {
 	logger := l.Sugar()
 	defer logger.Sync()
 
-	secret := os.Getenv("GDAX_SECRET")
-	key := os.Getenv("GDAX_KEY")
-	passphrase := os.Getenv("GDAX_PASSPHRASE")
-
-	if secret == "" {
-		logger.Warn("GDAX_SECRET environment variable is required")
+	exchange, err := initExchange(*exchangeType)
+	if err != nil {
+		logger.Error(err)
 		os.Exit(1)
-	} else {
-		os.Setenv("COINBASE_SECRET", secret)
-	}
-	if key == "" {
-		logger.Warn("GDAX_KEY environment variable is required")
-		os.Exit(1)
-	} else {
-		os.Setenv("COINBASE_KEY", key)
-	}
-	if passphrase == "" {
-		logger.Warn("GDAX_PASSPHRASE environment variable is required")
-		os.Exit(1)
-	} else {
-		os.Setenv("COINBASE_PASSPHRASE", key)
 	}
 
-	client := exchange.NewClient(secret, key, passphrase)
+	oType := exchanges.Market
+	switch *orderType {
+	case "market":
+		oType = exchanges.Market
+	case "limit":
+		oType = exchanges.Limit
+	default:
+		logger.Warn("unsupported order type " + *orderType)
+		os.Exit(1)
+	}
 
 	schedule, err := newGdaxSchedule(
-		client,
+		exchange,
 		logger,
 		!*makeTrades,
 		*autoFund,
 		*usd,
+		oType,
+		*orderSpread,
+		*fee,
 		*every,
 		*until,
 		*after,
@@ -112,6 +127,22 @@ func main() {
 	if err := schedule.Sync(); err != nil {
 		logger.Warn(err.Error())
 	}
+}
+
+func initExchange(exType string) (exchange exchanges.Exchange, err error) {
+	switch exType {
+	case "coinbase":
+		exchange, err = exchanges.NewCoinbase()
+	case "gemini":
+		exchange, err = exchanges.NewGemini()
+	case "ftxus":
+		exchange, err = exchanges.NewFtx(true)
+	case "ftx":
+		exchange, err = exchanges.NewFtx(false)
+	default:
+		return nil, fmt.Errorf("unsupported exchange %s", exType)
+	}
+	return exchange, err
 }
 
 type generousDuration time.Duration

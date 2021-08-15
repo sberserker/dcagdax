@@ -6,38 +6,54 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"math/big"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	exchange "github.com/sberserker/dcagdax/coinbase"
 	"go.uber.org/zap"
+
+	"github.com/sberserker/dcagdax/exchanges"
+	"github.com/shopspring/decimal"
 )
 
 var skippedForDebug = errors.New("Skipping because trades are not enabled")
 
-type gdaxSchedule struct {
-	logger *zap.SugaredLogger
-	client *exchange.Client
-	debug  bool
+const (
+	Currency = "USD"
+)
 
-	usd      float64
-	every    time.Duration
-	until    time.Time
-	after    time.Time
-	autoFund bool
-	coins    map[string]float64
-	force    bool
+type orderDetails struct {
+	symbol string
+	amount float64
+}
+
+type gdaxSchedule struct {
+	logger   *zap.SugaredLogger
+	exchange exchanges.Exchange
+	debug    bool
+
+	usd         float64
+	orderSpread float64
+	orderType   exchanges.OrderTypeType
+	fee         float64
+	every       time.Duration
+	until       time.Time
+	after       time.Time
+	autoFund    bool
+	coins       map[string]orderDetails
+	force       bool
 }
 
 func newGdaxSchedule(
-	c *exchange.Client,
+	exchange exchanges.Exchange,
 	l *zap.SugaredLogger,
 	debug bool,
 	autoFund bool,
 	usd float64,
+	orderType exchanges.OrderTypeType,
+	orderSpread float64,
+	fee float64,
 	every time.Duration,
 	until time.Time,
 	after time.Time,
@@ -45,17 +61,20 @@ func newGdaxSchedule(
 	force bool,
 ) (*gdaxSchedule, error) {
 	schedule := gdaxSchedule{
-		logger: l,
-		client: c,
-		debug:  debug,
+		logger:   l,
+		exchange: exchange,
+		debug:    debug,
 
-		usd:      usd,
-		every:    every,
-		until:    until,
-		after:    after,
-		autoFund: autoFund,
-		coins:    map[string]float64{},
-		force:    force,
+		orderSpread: orderSpread,
+		orderType:   orderType,
+		fee:         fee,
+		usd:         usd,
+		every:       every,
+		until:       until,
+		after:       after,
+		autoFund:    autoFund,
+		coins:       map[string]orderDetails{},
+		force:       force,
 	}
 
 	total := 0
@@ -70,7 +89,8 @@ func newGdaxSchedule(
 
 		total += int(percentage)
 
-		minimum, err := schedule.minimumUSDPurchase(coin)
+		symbol := exchange.GetTickerSymbol(coin, Currency)
+		minimum, err := schedule.minimumUSDPurchase(symbol)
 
 		if err != nil {
 			return nil, err
@@ -80,8 +100,15 @@ func newGdaxSchedule(
 			schedule.usd = minimum + 0.1
 		}
 
-		scheduledForCoin := roundFloat(schedule.usd*float64(percentage)/100, 8)
-		schedule.coins[coin] = scheduledForCoin
+		//schedule.usd * percentage / 100
+		scheduledForCoin, _ := decimal.NewFromFloat(usd).Mul(decimal.NewFromFloat(float64(percentage))).Div(decimal.NewFromFloat(100)).Truncate(2).Float64()
+
+		order := orderDetails{
+			symbol: symbol,
+			amount: scheduledForCoin,
+		}
+
+		schedule.coins[coin] = order
 
 		if scheduledForCoin < minimum {
 			return nil, fmt.Errorf(
@@ -96,27 +123,6 @@ func newGdaxSchedule(
 	}
 
 	return &schedule, nil
-}
-
-func roundFloat(f float64, places int) float64 {
-	shift := math.Pow(10, float64(places))
-	return math.Floor(f*shift+.5) / shift
-}
-
-//truncate cuts float to a provided precision
-func truncate(f float64, unit float64) float64 {
-	bf := big.NewFloat(0).SetPrec(1000).SetFloat64(f)
-	bu := big.NewFloat(0).SetPrec(1000).SetFloat64(unit)
-
-	bf.Quo(bf, bu)
-
-	// Truncate:
-	i := big.NewInt(0)
-	bf.Int(i)
-	bf.SetInt(i)
-
-	f, _ = bf.Mul(bf, bu).Float64()
-	return f
 }
 
 // Sync initiates trades & funding with a DCA strategy.
@@ -138,13 +144,15 @@ func (s *gdaxSchedule) Sync() error {
 	}
 
 	s.logger.Infow("Dollar cost averaging",
-		"USD", s.usd,
+		Currency, s.usd,
 		"every", every,
 		"until", until.String(),
 	)
 
+	since := now.Add(-*every)
+
 	if s.force != true {
-		if time, err := s.timeToPurchase(); err != nil {
+		if time, err := s.timeToPurchase(since); err != nil {
 			return err
 		} else if !time {
 			return errors.New("Detected a recent purchase, waiting for next purchase window")
@@ -156,68 +164,62 @@ func (s *gdaxSchedule) Sync() error {
 		}
 	}
 
-	if funded, err := s.sufficientUsdAvailable(); err != nil {
+	needed, err := s.additionalUsdNeeded()
+	if err != nil {
 		return err
-	} else if !funded {
-		needed, err := s.additionalUsdNeeded()
+	}
+
+	//check if there are pending transfers
+	//typically pending transfers means something is stuck, need to wait to settle or resolve the issue
+	if needed > 0 {
+		pending, err := s.pendingTransfers()
 		if err != nil {
 			return err
 		}
 
-		if needed == 0 {
-			return errors.New("Not enough available funds, wait for transfers to settle")
+		if pending > 0 {
+			return errors.New("Wait for transfers to settle")
 		}
 
-		if needed > 0 {
+		s.logger.Infow(
+			"Insufficient funds",
+			"needed", needed,
+		)
+
+		if !s.autoFund {
+			return errors.New("No sufficient amount for trade and autofund is disabled. Deposit money to proceed")
+		}
+
+		payoutAt, err := s.fund(needed)
+		if err != nil {
+			return err
+		}
+
+		//calculate when money will available to buy and sleep
+		waitTime := payoutAt.Add(1 * time.Minute).Sub(time.Now())
+		if waitTime < 2*time.Minute {
 			s.logger.Infow(
-				"Insufficient funds",
-				"needed", needed,
+				"Sleeping for",
+				"minutes", waitTime.Minutes(),
 			)
-			if s.autoFund {
-				s.logger.Infow(
-					"Creating a transfer request for $%.02f",
-					"needed", needed,
-				)
-
-				if s.debug != true {
-					payoutAt, err := s.makeDeposit(needed)
-					if err != nil {
-						return err
-					}
-
-					//calculate when money will available to buy and sleep
-					waitTime := payoutAt.Add(1 * time.Minute).Sub(time.Now())
-					if waitTime < 2*time.Minute {
-						s.logger.Infow(
-							"Sleeping for",
-							"minutes", waitTime.Minutes(),
-						)
-						time.Sleep(waitTime)
-					} else {
-						s.logger.Infow(
-							"Deposit money will ba available in. Exiting now",
-							"minutes", waitTime.Minutes(),
-						)
-						return nil
-					}
-
-				} else {
-					s.logger.Infow("Deposit skipped for debug")
-				}
-			}
+			time.Sleep(waitTime)
+		} else {
+			s.logger.Infow(
+				"Deposit money will ba available in. Exiting now",
+				"minutes", waitTime.Minutes(),
+			)
+			return nil
 		}
 	}
 
-	s.logger.Infow(
-		"Placing an order",
-		"coins", s.coins,
-		"purchaseCurrency", "USD",
-		"purchaseAmount", s.usd,
-	)
+	for _, order := range s.coins {
+		s.logger.Infow(
+			"Placing an order",
+			"productId", order.symbol,
+			"amount", order.amount,
+		)
 
-	for coin, amount := range s.coins {
-		productId := coin + "-" + "USD"
-		if err := s.makePurchase(productId, amount); err != nil {
+		if err := s.makePurchase(order.symbol, order.amount); err != nil {
 			s.logger.Warn(err)
 		}
 	}
@@ -225,34 +227,50 @@ func (s *gdaxSchedule) Sync() error {
 	return nil
 }
 
-func (s *gdaxSchedule) minimumUSDPurchase(coin string) (float64, error) {
-	productId := coin + "-" + "USD"
-	ticker, err := s.client.GetTicker(productId)
+func (s *gdaxSchedule) fund(needed float64) (*time.Time, error) {
+	s.logger.Infow(
+		"Creating a transfer request for $%.02f",
+		"needed", needed,
+	)
 
+	if s.debug {
+		s.logger.Infow("Deposit skipped for debug")
+		now := time.Now()
+		return &now, nil
+	}
+
+	payoutAt, err := s.makeDeposit(needed)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	products, err := s.client.GetProducts()
-
-	if err != nil {
-		return 0, err
-	}
-
-	for _, p := range products {
-		if p.BaseCurrency == coin {
-			return math.Max(p.BaseMinSize*ticker.Price, 1.0), nil
-		}
-	}
-
-	return 0, errors.New(productId + " not found")
+	return payoutAt, nil
 }
 
-func (s *gdaxSchedule) timeToPurchase() (bool, error) {
-	timeSinceLastPurchase, err := s.timeSinceLastPurchase()
+func (s *gdaxSchedule) minimumUSDPurchase(productId string) (float64, error) {
+	product, err := s.exchange.GetProduct(productId)
+	if err != nil {
+		return 0, err
+	}
+
+	ticker, err := s.exchange.GetTicker(productId)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return math.Max(product.BaseMinSize*ticker.Price, 1.0), nil
+}
+
+func (s *gdaxSchedule) timeToPurchase(since time.Time) (bool, error) {
+	timeSinceLastPurchase, err := s.timeSinceLastPurchase(since)
 
 	if err != nil {
 		return false, err
+	}
+
+	if timeSinceLastPurchase == nil {
+		return true, nil
 	}
 
 	s.logger.Infow(
@@ -268,104 +286,79 @@ func (s *gdaxSchedule) timeToPurchase() (bool, error) {
 	return true, nil
 }
 
-func (s *gdaxSchedule) sufficientUsdAvailable() (bool, error) {
-	usdAccount, err := s.accountFor("USD")
-
-	if err != nil {
-		return false, err
-	}
-
-	return (usdAccount.Available >= s.usd), nil
-}
-
 func (s *gdaxSchedule) additionalUsdNeeded() (float64, error) {
-	if funded, err := s.sufficientUsdAvailable(); err != nil {
+	usdAccount, err := s.exchange.GetFiatAccount(Currency)
+	if err != nil {
 		return 0, err
-	} else if funded {
+	}
+
+	if usdAccount.Available >= s.usd {
 		return 0, nil
 	}
 
-	usdAccount, err := s.accountFor("USD")
-	if err != nil {
-		return 0, nil
-	}
+	availableBalance := decimal.NewFromFloat(usdAccount.Available).Truncate(2)
+
+	s.logger.Infow(
+		"Avaialable balance",
+		"amount", availableBalance.String(),
+	)
 
 	//account may have some fraction of cents from previous trading so cut everything after 0.01
-	//note cut only don't round
-	usdAvailable := truncate(usdAccount.Available, 0.01)
+	//s.usd - availableBalance
+	dollarsNeeded, _ := decimal.NewFromFloat(s.usd).Sub(availableBalance).Truncate(2).Float64()
 
-	dollarsNeeded := s.usd - usdAvailable
-	if dollarsNeeded < 0 {
-		return 0, errors.New("Invalid account balance")
+	return dollarsNeeded, nil
+}
+
+func (s *gdaxSchedule) pendingTransfers() (float64, error) {
+	transfers, err := s.exchange.GetPendingTransfers(Currency)
+	if err != nil {
+		return 0, err
 	}
-
-	// Dang, we don't have enough funds. Let's see if money is on the way.
-	var transfers []exchange.Transfer
-	cursor := s.client.ListAccountTransfers(usdAccount.Id)
+	if transfers == nil {
+		return 0, nil
+	}
 
 	dollarsInbound := 0.0
 
-	for cursor.HasMore {
-		if err := cursor.NextPage(&transfers); err != nil {
-			return 0, err
-		}
-
-		for _, t := range transfers {
-			unprocessed := (t.ProcessedAt.Time() == time.Time{})
-			notCanceled := (t.CanceledAt.Time() == time.Time{})
-
-			// This transfer is stil pending, so count it.
-			if unprocessed && notCanceled {
-				s.logger.Infow(
-					"Deposit is in progress",
-					"amount", t.Amount,
-				)
-				dollarsInbound += t.Amount
-			}
-		}
+	for _, t := range transfers {
+		s.logger.Infow(
+			"Deposit is in progress",
+			"amount", t.Amount,
+		)
+		dollarsInbound += t.Amount
 	}
 
-	// If our incoming transfers don't cover our purchase need then we'll need
-	// to cover that with an additional deposit.
-	return math.Max(dollarsNeeded-dollarsInbound, 0), nil
+	return dollarsInbound, nil
 }
 
-func (s *gdaxSchedule) timeSinceLastPurchase() (time.Duration, error) {
+func (s *gdaxSchedule) timeSinceLastPurchase(since time.Time) (*time.Duration, error) {
 	coins := make([]string, 0, len(s.coins))
 	for k := range s.coins {
 		coins = append(coins, k)
 	}
 
-	var transactions []exchange.LedgerEntry
-	account, err := s.accountFor(coins[0]) //taking the first coins a marker, make sure to put your main coin first
+	lastPurchaseTime, err := s.exchange.LastPurchaseTime(coins[0], Currency, since) //taking the first coins a marker, make sure to put your main coin first
+
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	cursor := s.client.ListAccountLedger(account.Id)
 
-	lastTransactionTime := time.Time{}
-	now := time.Now()
-
-	for cursor.HasMore {
-		if err := cursor.NextPage(&transactions); err != nil {
-			return 0, err
-
-		}
-
-		// Consider trade transactions
-		for _, t := range transactions {
-			if t.CreatedAt.Time().After(lastTransactionTime) && t.Type == "match" {
-				lastTransactionTime = t.CreatedAt.Time()
-			}
-		}
+	if lastPurchaseTime == nil {
+		s.logger.Infow(
+			"No transactions found since",
+			"since", since.Local(),
+		)
+		return nil, nil
 	}
 
 	s.logger.Infow(
 		"Last transaction time",
-		"time", lastTransactionTime.Local(),
+		"time", lastPurchaseTime.Local(),
 	)
 
-	return now.Sub(lastTransactionTime), nil
+	timeSinceLastPurchase := time.Now().Sub(*lastPurchaseTime)
+	return &timeSinceLastPurchase, nil
 }
 
 func (s *gdaxSchedule) makePurchase(productId string, amount float64) error {
@@ -373,14 +366,7 @@ func (s *gdaxSchedule) makePurchase(productId string, amount float64) error {
 		return skippedForDebug
 	}
 
-	order, err := s.client.CreateOrder(
-		&exchange.Order{
-			ProductId: productId,
-			Type:      "market",
-			Side:      "buy",
-			Funds:     amount, // Coinbase has a limit of 8 decimal places.
-		},
-	)
+	order, err := s.exchange.CreateOrder(productId, amount, s.orderType, s.calcLimitOrder)
 
 	if err != nil {
 		return err
@@ -388,37 +374,15 @@ func (s *gdaxSchedule) makePurchase(productId string, amount float64) error {
 
 	s.logger.Infow(
 		"Placed order",
-		"productId", productId,
-		"orderId", order.Id,
+		"orderId", order.OrderID,
 	)
 
 	return nil
 }
 
 func (s *gdaxSchedule) makeDeposit(amount float64) (*time.Time, error) {
-	paymentMethods, err := s.client.ListPaymentMethods()
 
-	if err != nil {
-		return nil, err
-	}
-
-	var bankAccount *exchange.PaymentMethod = nil
-
-	for i := range paymentMethods {
-		if paymentMethods[i].Type == "ach_bank_account" {
-			bankAccount = &paymentMethods[i]
-		}
-	}
-
-	if bankAccount == nil {
-		return nil, errors.New("No ACH bank account found on this account")
-	}
-
-	depositResponse, err := s.client.Deposit(exchange.DepositParams{
-		Amount:          amount,
-		Currency:        "USD",
-		PaymentMethodID: bankAccount.ID,
-	})
+	payoutAt, err := s.exchange.Deposit(Currency, amount)
 
 	if err != nil {
 		return nil, err
@@ -426,26 +390,10 @@ func (s *gdaxSchedule) makeDeposit(amount float64) (*time.Time, error) {
 
 	s.logger.Infow(
 		"Deposit initiated successfully",
-		"payout", depositResponse.PayoutAt,
+		"payout", payoutAt,
 	)
 
-	payoutAt := depositResponse.PayoutAt.Time()
-	return &payoutAt, nil
-}
-
-func (s *gdaxSchedule) accountFor(currencyCode string) (*exchange.Account, error) {
-	accounts, err := s.client.GetAccounts()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, a := range accounts {
-		if a.Currency == currencyCode {
-			return &a, nil
-		}
-	}
-
-	return nil, fmt.Errorf("No %s wallet on this account", currencyCode)
+	return payoutAt, nil
 }
 
 func askForConfirmation(s string) bool {
@@ -467,4 +415,29 @@ func askForConfirmation(s string) bool {
 			return false
 		}
 	}
+}
+
+func (s *gdaxSchedule) calcLimitOrder(askPrice decimal.Decimal, fiatAmount decimal.Decimal) (orderPrice decimal.Decimal, orderSize decimal.Decimal) {
+
+	//reduce fiat Amount to include fees %
+	//(1-fee)/100 * fiatAmount
+	fiatAmount = decimal.NewFromFloat((100 - s.fee) / 100).Mul(fiatAmount)
+
+	spread := decimal.NewFromFloat(s.orderSpread)
+
+	//calc order price
+	//ask * spread / 100 + ask
+	orderPrice = askPrice.Mul(spread).Div(decimal.NewFromInt32(100)).Add(askPrice).Truncate(2)
+
+	//order size
+	//fiatAmount / orderPrice
+	orderSize = fiatAmount.Div(orderPrice).Truncate(8)
+
+	s.logger.Infow(
+		"Limit order",
+		"size", orderSize.String(),
+		"price", orderPrice.String(),
+	)
+
+	return orderPrice, orderSize
 }

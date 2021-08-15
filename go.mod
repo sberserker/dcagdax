@@ -8,11 +8,24 @@ require (
 	github.com/alecthomas/repr v0.0.0-20181024024818-d37bc2a10ba1 // indirect
 	github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc // indirect
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
+	github.com/claudiocandio/gemini-api v1.0.1 // indirect
+	github.com/dustin/go-humanize v1.0.0 // indirect
+	github.com/go-numb/go-ftx v0.0.0-20200829181514-3144aa68f505 // indirect
+	github.com/google/go-querystring v1.0.0 // indirect
+	github.com/google/uuid v1.3.0 // indirect
+	github.com/grishinsana/goftx v1.2.2-0.20210726052311-b7369763f91c // indirect
+	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/mattn/go-isatty v0.0.11 // indirect
-	github.com/pkg/errors v0.8.1 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/sergi/go-diff v1.1.0 // indirect
+	github.com/shopspring/decimal v1.2.0 // indirect
+	github.com/sirupsen/logrus v1.8.1 // indirect
+	github.com/stretchr/testify v1.6.1 // indirect
+	github.com/valyala/fasthttp v1.16.0 // indirect
 	go.uber.org/atomic v1.2.0 // indirect
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.6.0
+	golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.5
+	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )
