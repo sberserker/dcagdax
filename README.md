@@ -52,6 +52,7 @@ Flags:
   --every=EVERY          How often to make purchases, e.g. 1h, 7d, 3w.
   --usd=USD              How much USD to spend on each purchase. If unspecified, the
                          minimum purchase amount allowed will be used.
+  --currency="USD"       USD, EUR etc
   --until=UNTIL          Stop executing trades after this date, e.g. 2017-12-31.
   --after=AFTER          Start executing trades after this date, e.g. 2017-12-31.
   --trade                Actually execute trades.

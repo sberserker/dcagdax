@@ -35,6 +35,11 @@ var (
 		"How much USD to spend on each purchase. If unspecified, the minimum purchase amount allowed will be used.",
 	).Float()
 
+	currency = kingpin.Flag(
+		"currency",
+		"USD, EUR etc",
+	).Default("USD").String()
+
 	after = registerDate(kingpin.Flag(
 		"after",
 		"Start executing trades after this date, e.g. 2017-12-31.",
@@ -114,7 +119,7 @@ func main() {
 		after:       *after,
 		coins:       *coins,
 		force:       *force,
-		currency:    "USD",
+		currency:    *currency,
 	}
 
 	schedule, err := newGdaxSchedule(
