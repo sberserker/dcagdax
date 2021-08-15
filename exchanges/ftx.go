@@ -6,8 +6,10 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/grishinsana/goftx"
 	"github.com/grishinsana/goftx/models"
 	"github.com/shopspring/decimal"
@@ -83,33 +85,40 @@ func (f *Ftx) GetProduct(productId string) (Product, error) {
 }
 
 func (f *Ftx) Deposit(currency string, amount float64) (*time.Time, error) {
-	return nil, errors.New("ftx exchange bank deposit is not implemented")
+	return nil, errors.New("ftx exchange bank deposit is not supported by exchange api")
 }
 
-func (f *Ftx) CreateOrder(productId string, amount float64) (Order, error) {
+func (f *Ftx) CreateOrder(productId string, amount float64, orderType OrderTypeType, limitOrderFunc CalcLimitOrder) (*Order, error) {
+
+	if orderType == Market {
+		return nil, errors.New("ftx market oder type is size based and is not supported use limit order type instead")
+	}
+
 	m, err := f.client.Markets.GetMarketByName(productId)
 
 	if err != nil {
-		return Order{}, err
+		return nil, err
 	}
 
-	//reduce size by 1% to avoid order going over allocated amount
-	size := decimal.NewFromFloat(amount).Div(m.Ask).Mul(decimal.NewFromFloat(0.99)).Truncate(8)
+	orderPrice, orderSize := limitOrderFunc(m.Ask, decimal.NewFromFloat(amount))
+	clientOrderID := uuid.New().String()
 
 	p := models.PlaceOrderPayload{
-		Market: productId,
-		Type:   models.MarketOrder,
-		Side:   "buy",
-		Size:   size,
+		Market:   productId,
+		Type:     models.LimitOrder,
+		Side:     "buy",
+		Size:     orderSize,
+		Price:    orderPrice,
+		ClientID: &clientOrderID,
 	}
 
 	order, err := f.client.PlaceOrder(&p)
 	if err != nil {
-		return Order{}, nil
+		return nil, nil
 	}
 
-	return Order{
-		OrderID: order.ClientID,
+	return &Order{
+		OrderID: strconv.FormatInt(order.ID, 10),
 	}, nil
 }
 

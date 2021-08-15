@@ -1,6 +1,12 @@
 package exchanges
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
+
+type CalcLimitOrder func(askPrice decimal.Decimal, fiatAmount decimal.Decimal) (orderPrice decimal.Decimal, orderSize decimal.Decimal)
 
 type Exchange interface {
 	GetTickerSymbol(baseCurrency string, quoteCurrency string) string
@@ -11,7 +17,7 @@ type Exchange interface {
 
 	Deposit(currency string, amount float64) (*time.Time, error)
 
-	CreateOrder(productId string, amount float64) (Order, error)
+	CreateOrder(productId string, amount float64, orderType OrderTypeType, limitOrderFunc CalcLimitOrder) (*Order, error)
 
 	LastPurchaseTime(ticker string, currency string, since time.Time) (*time.Time, error)
 
@@ -19,6 +25,13 @@ type Exchange interface {
 
 	GetPendingTransfers(currency string) ([]PendingTransfer, error)
 }
+
+type OrderTypeType int32
+
+const (
+	Market OrderTypeType = 0
+	Limit  OrderTypeType = 1
+)
 
 type Order struct {
 	Symbol  string

@@ -15,15 +15,15 @@ import (
 )
 
 var (
+	exchangeType = kingpin.Flag(
+		"exchange",
+		"Exchange coinbase, gemini, ftx, ftxus. Default: coinbase",
+	).Default("coinbase").String()
+
 	coins = kingpin.Flag(
 		"coin",
 		"Which coin you want to buy: BTC, LTC, BCH.",
 	).Strings()
-
-	exchangeType = kingpin.Flag(
-		"exchange",
-		"Exchange coinbase, gemini, ftx. Default: coinbase",
-	).Default("coinbase").String()
 
 	every = registerGenerousDuration(kingpin.Flag(
 		"every",
@@ -59,10 +59,25 @@ var (
 		"force",
 		"Execute trade regardless of the window. Use with caution every run will execute the trade",
 	).Bool()
+
+	orderType = kingpin.Flag(
+		"type",
+		"Order type market, limit. Default: market",
+	).Default("market").String()
+
+	orderSpread = kingpin.Flag(
+		"spread",
+		"Percentage to add above ask price to get limit order executed. Default: 1.0",
+	).Default("1.0").Float()
+
+	fee = kingpin.Flag(
+		"fee",
+		"Fee level to exclude from limit order amount. Default: 0.5",
+	).Default("0.5").Float()
 )
 
 func main() {
-	kingpin.Version("0.1.0")
+	kingpin.Version("0.1.1")
 	kingpin.Parse()
 
 	config := zap.NewProductionConfig()
@@ -77,12 +92,26 @@ func main() {
 		os.Exit(1)
 	}
 
+	oType := exchanges.Market
+	switch *orderType {
+	case "market":
+		oType = exchanges.Market
+	case "limit":
+		oType = exchanges.Limit
+	default:
+		logger.Warn("unsupported order type " + *orderType)
+		os.Exit(1)
+	}
+
 	schedule, err := newGdaxSchedule(
 		exchange,
 		logger,
 		!*makeTrades,
 		*autoFund,
 		*usd,
+		oType,
+		*orderSpread,
+		*fee,
 		*every,
 		*until,
 		*after,

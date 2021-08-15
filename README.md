@@ -8,10 +8,18 @@ Added the following features
 - added percentage buys
 - added force flag to buy now regardless of the window check, will ask for confirmation
 - added after flag
+- added support for geminit and ftx/ftx.us exchanges
+- added limit order type support
 
-
-Potentially can support FTX and Gemini exchanges as implementation was abstracted but left unfinished due to both of them dont support bank deposit at the moment. 
-
+Note Ftx and Gemini do not support funding over api at the moment. Autofund periodically manually if you plan to use those exchanges.
+Ftx and Gemini do not support market order type. Use limit order type with the following flags to successfully execute trade. 
+```
+--type limit
+--spread % to increase ask price to accommodate possible price fluctuation when order is placed. Default: 1
+--fee % for exchange commission typically 0.1-0.5 for most exchanges depends on fee exchange and fee tier. Default 0.5
+```
+Limit order may spend a little less every purchase to accommodate spread and fee. 
+Unused portion will be left on exchange and included into a next order. 
 ## Setup
 
 If you only have a Coinbase account you'll need to also sign into
@@ -37,18 +45,21 @@ Then run it:
 usage: dcagdax --every=EVERY [<flags>]
 
 Flags:
-  --help         Show context-sensitive help (also try --help-long and
-                 --help-man).
-  --coin=BTC     Which coin you want to buy: BTC, LTC, BCH or ETH : percentage amount. Can be split between multipe coins. Total must be 100%. Example --coin BTC:70 --coin ETH:30
-  --every=EVERY  How often to make purchases, e.g. 1h, 7d, 3w.
-  --usd=USD      How much USD to spend on each purchase. If unspecified, the
-                 minimum purchase amount allowed will be used.
-  --until=UNTIL  Stop executing trades after this date, e.g. 2017-12-31.
-  --after=AFTER  Start executing trades after this date, e.g. 2017-12-31.
-  --trade        Actually execute trades.
-  --autofund     Automatically initiate ACH deposits.
-  --force        Force trade despite trading windows, will ask for user confirmation
-  --version      Show application version.
+  --help                 Show context-sensitive help (also try --help-long and--help-man).
+  --exchange="coinbase"  Exchange coinbase, gemini, ftx, ftxus. Default: coinbase
+  --coin=BTC             Which coin you want to buy: BTC, LTC, BCH or ETH : percentage amount. Can be split between multipe coins. Total must be 100%. Example --coin BTC:70 --coin ETH:30
+  --every=EVERY          How often to make purchases, e.g. 1h, 7d, 3w.
+  --usd=USD              How much USD to spend on each purchase. If unspecified, the
+                         minimum purchase amount allowed will be used.
+  --until=UNTIL          Stop executing trades after this date, e.g. 2017-12-31.
+  --after=AFTER          Start executing trades after this date, e.g. 2017-12-31.
+  --trade                Actually execute trades.
+  --autofund             Automatically initiate ACH deposits.
+  --force                Force trade despite trading windows, will ask for user confirmation
+  --type="market"        Order type market, limit. Default: market
+  --spread=1.0           Percentage to add above ask price to get limit order executed. Default: 1.0
+  --fee=0.5              Fee level to exclude from limit order amount. Default: 0.5
+  --version              Show application version.
 ```
 
 Run the `dcagdax` binary with an environment containing your API credentials:

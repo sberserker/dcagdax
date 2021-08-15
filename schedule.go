@@ -33,13 +33,16 @@ type gdaxSchedule struct {
 	exchange exchanges.Exchange
 	debug    bool
 
-	usd      float64
-	every    time.Duration
-	until    time.Time
-	after    time.Time
-	autoFund bool
-	coins    map[string]orderDetails
-	force    bool
+	usd         float64
+	orderSpread float64
+	orderType   exchanges.OrderTypeType
+	fee         float64
+	every       time.Duration
+	until       time.Time
+	after       time.Time
+	autoFund    bool
+	coins       map[string]orderDetails
+	force       bool
 }
 
 func newGdaxSchedule(
@@ -48,6 +51,9 @@ func newGdaxSchedule(
 	debug bool,
 	autoFund bool,
 	usd float64,
+	orderType exchanges.OrderTypeType,
+	orderSpread float64,
+	fee float64,
 	every time.Duration,
 	until time.Time,
 	after time.Time,
@@ -59,13 +65,16 @@ func newGdaxSchedule(
 		exchange: exchange,
 		debug:    debug,
 
-		usd:      usd,
-		every:    every,
-		until:    until,
-		after:    after,
-		autoFund: autoFund,
-		coins:    map[string]orderDetails{},
-		force:    force,
+		orderSpread: orderSpread,
+		orderType:   orderType,
+		fee:         fee,
+		usd:         usd,
+		every:       every,
+		until:       until,
+		after:       after,
+		autoFund:    autoFund,
+		coins:       map[string]orderDetails{},
+		force:       force,
 	}
 
 	total := 0
@@ -357,7 +366,7 @@ func (s *gdaxSchedule) makePurchase(productId string, amount float64) error {
 		return skippedForDebug
 	}
 
-	order, err := s.exchange.CreateOrder(productId, amount)
+	order, err := s.exchange.CreateOrder(productId, amount, s.orderType, s.calcLimitOrder)
 
 	if err != nil {
 		return err
@@ -406,4 +415,29 @@ func askForConfirmation(s string) bool {
 			return false
 		}
 	}
+}
+
+func (s *gdaxSchedule) calcLimitOrder(askPrice decimal.Decimal, fiatAmount decimal.Decimal) (orderPrice decimal.Decimal, orderSize decimal.Decimal) {
+
+	//reduce fiat Amount to include fees %
+	//(1-fee)/100 * fiatAmount
+	fiatAmount = decimal.NewFromFloat((100 - s.fee) / 100).Mul(fiatAmount)
+
+	spread := decimal.NewFromFloat(s.orderSpread)
+
+	//calc order price
+	//ask * spread / 100 + ask
+	orderPrice = askPrice.Mul(spread).Div(decimal.NewFromInt32(100)).Add(askPrice).Truncate(2)
+
+	//order size
+	//fiatAmount / orderPrice
+	orderSize = fiatAmount.Div(orderPrice).Truncate(8)
+
+	s.logger.Infow(
+		"Limit order",
+		"size", orderSize.String(),
+		"price", orderPrice.String(),
+	)
+
+	return orderPrice, orderSize
 }

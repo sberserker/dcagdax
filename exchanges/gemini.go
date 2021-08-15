@@ -69,30 +69,34 @@ func (g *Gemini) GetProduct(productId string) (Product, error) {
 }
 
 func (g *Gemini) Deposit(currency string, amount float64) (*time.Time, error) {
-	return nil, errors.New("gemini exchange bank deposit is not implemented")
+	return nil, errors.New("gemini exchange bank deposit is not supported by exchange api")
 }
 
-func (g *Gemini) CreateOrder(productId string, amount float64) (Order, error) {
+func (g *Gemini) CreateOrder(productId string, amount float64, orderType OrderTypeType, limitOrderFunc CalcLimitOrder) (*Order, error) {
 	//gemini doesn't support market order type
 	//set limit order with high enough price to get filled
 
-	ticker, err := g.client.TickerV2(productId)
-	if err != nil {
-		return Order{}, err
+	if orderType == Market {
+		return nil, errors.New("gemini exchange api does not support marker order type")
 	}
 
-	//add 2% to make order executed
-	price, _ := decimal.NewFromFloat(ticker.Ask + ticker.Ask*2/100).Truncate(2).Float64()
-	orderAmt, _ := decimal.NewFromFloat(amount / price).Truncate(8).Float64()
+	ticker, err := g.client.TickerV2(productId)
+	if err != nil {
+		return nil, err
+	}
+
+	orderPrice, orderSize := limitOrderFunc(decimal.NewFromFloat(ticker.Ask), decimal.NewFromFloat(amount))
+	orderPricef, _ := orderPrice.Float64()
+	orderSizef, _ := orderSize.Float64()
 
 	clientOrderID := uuid.New().String()
 
-	_, err = g.client.NewOrder(productId, clientOrderID, orderAmt, price, "Buy", nil)
+	_, err = g.client.NewOrder(productId, clientOrderID, orderSizef, orderPricef, "Buy", nil)
 	if err != nil {
-		return Order{}, err
+		return nil, err
 	}
 
-	return Order{
+	return &Order{
 		Symbol:  productId,
 		OrderID: clientOrderID,
 	}, nil

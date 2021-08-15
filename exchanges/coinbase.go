@@ -7,6 +7,7 @@ import (
 	"time"
 
 	exchange "github.com/sberserker/dcagdax/clients/coinbase"
+	"github.com/shopspring/decimal"
 )
 
 type Coinbase struct {
@@ -35,21 +36,43 @@ func NewCoinbase() (*Coinbase, error) {
 	}, nil
 }
 
-func (c *Coinbase) CreateOrder(productId string, amount float64) (Order, error) {
-	order, err := c.client.CreateOrder(
-		&exchange.Order{
+func (c *Coinbase) CreateOrder(productId string, amount float64, orderType OrderTypeType, limitOrderFunc CalcLimitOrder) (*Order, error) {
+
+	var orderReq exchange.Order
+
+	if orderType == Limit {
+		ticker, err := c.client.GetTicker(productId)
+		if err != nil {
+			return nil, err
+		}
+
+		orderPrice, orderSize := limitOrderFunc(decimal.NewFromFloat(ticker.Ask), decimal.NewFromFloat(amount))
+		orderPricef, _ := orderPrice.Float64()
+		orderSizef, _ := orderSize.Float64()
+
+		orderReq = exchange.Order{
+			ProductId: productId,
+			Type:      "limit",
+			Side:      "buy",
+			Size:      orderSizef,
+			Price:     orderPricef,
+		}
+	} else {
+		orderReq = exchange.Order{
 			ProductId: productId,
 			Type:      "market",
 			Side:      "buy",
-			Funds:     amount, // Coinbase has a limit of 8 decimal places.
-		},
-	)
-
-	if err != nil {
-		return Order{}, err
+			Funds:     amount,
+		}
 	}
 
-	return Order{
+	order, err := c.client.CreateOrder(&orderReq)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Order{
 		Symbol:  order.ProductId,
 		OrderID: order.Id,
 	}, nil
@@ -168,9 +191,12 @@ func (c *Coinbase) GetPendingTransfers(currency string) ([]PendingTransfer, erro
 		for _, t := range transfers {
 			unprocessed := (t.ProcessedAt.Time() == time.Time{})
 			notCanceled := (t.CanceledAt.Time() == time.Time{})
+			//if it's pending for more than 1 day consider it stuck
+			//coinbase sometimes have those issues which support is unable to resolve
+			stuck := t.CreatedAt.Time().Before(time.Now().AddDate(0, 0, -1))
 
 			// This transfer is stil pending, so count it.
-			if unprocessed && notCanceled {
+			if unprocessed && notCanceled && !stuck {
 				pendingTransfers = append(pendingTransfers, PendingTransfer{Amount: t.Amount})
 			}
 		}
