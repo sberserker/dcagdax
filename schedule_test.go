@@ -110,30 +110,83 @@ func TestWhenRecentPurchase(t *testing.T) {
 		assert.Equal(t, "some error", err.Error())
 	})
 }
+func TestTimeToPurchase(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockExchange(ctrl)
+
+	s := gdaxSchedule{}
+	s.logger = loggerStub(t).Sugar()
+	s.req = syncRequest{every: 24 * time.Hour, currency: "USD"} // setup run every 24 hrs
+	s.coins = map[string]orderDetails{"BTC": {}}
+	s.exchange = m
+
+	t.Run("when recent purchase", func(t *testing.T) {
+		lastPurchaseTime := time.Now().Add(-12 * time.Hour) //last purchase time 12 hrs ago
+		m.EXPECT().LastPurchaseTime("BTC", "USD", gomock.Any()).Return(&lastPurchaseTime, nil)
+
+		result, err := s.timeToPurchase(time.Now().Add(-24 * time.Hour))
+
+		assert.False(t, result)
+		assert.Nil(t, err)
+	})
+
+	t.Run("when no recent purchase", func(t *testing.T) {
+		lastPurchaseTime := time.Now().Add(-48 * time.Hour) //last purchase time 2 days ago
+		m.EXPECT().LastPurchaseTime("BTC", "USD", gomock.Any()).Return(&lastPurchaseTime, nil)
+
+		result, err := s.timeToPurchase(time.Now().Add(-24 * time.Hour))
+
+		assert.True(t, result)
+		assert.Nil(t, err)
+	})
+}
 
 func TestNewSchedule(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	m := mocks.NewMockExchange(ctrl)
-	req := syncRequest{every: 24 * time.Hour, orderType: exchanges.Market, autoFund: true, currency: "USD", usd: 50, coins: []string{"BTC:50", "ETH:50"}} // setup run every 24 hrs
 
-	m.EXPECT().GetTickerSymbol("BTC", "USD").Return("BTC:USD")
-	m.EXPECT().GetProduct("BTC:USD").Return(&exchanges.Product{BaseMinSize: 0.001}, nil)
-	m.EXPECT().GetTicker("BTC:USD").Return(&exchanges.Ticker{Price: 1000}, nil)
+	t.Run("when success", func(t *testing.T) {
+		req := syncRequest{every: 24 * time.Hour, orderType: exchanges.Market, autoFund: true, currency: "USD", usd: 50, coins: []string{"BTC:50", "ETH:50"}} // setup run every 24 hrs
 
-	m.EXPECT().GetTickerSymbol("ETH", "USD").Return("ETH:USD")
-	m.EXPECT().GetProduct("ETH:USD").Return(&exchanges.Product{BaseMinSize: 0.5}, nil)
-	m.EXPECT().GetTicker("ETH:USD").Return(&exchanges.Ticker{Price: 10}, nil)
+		m.EXPECT().GetTickerSymbol("BTC", "USD").Return("BTC:USD")
+		m.EXPECT().GetProduct("BTC:USD").Return(&exchanges.Product{BaseMinSize: 0.001}, nil)
+		m.EXPECT().GetTicker("BTC:USD").Return(&exchanges.Ticker{Price: 1000}, nil)
 
-	s, err := newGdaxSchedule(m, loggerStub(t).Sugar(), false, req)
+		m.EXPECT().GetTickerSymbol("ETH", "USD").Return("ETH:USD")
+		m.EXPECT().GetProduct("ETH:USD").Return(&exchanges.Product{BaseMinSize: 0.5}, nil)
+		m.EXPECT().GetTicker("ETH:USD").Return(&exchanges.Ticker{Price: 10}, nil)
 
-	assert.Nil(t, err)
-	assert.NotNil(t, s)
-	assert.Equal(t, 25.0, s.coins["BTC"].amount)
-	assert.Equal(t, "BTC:USD", s.coins["BTC"].symbol)
-	assert.Equal(t, 25.0, s.coins["ETH"].amount)
-	assert.Equal(t, "ETH:USD", s.coins["ETH"].symbol)
+		s, err := newGdaxSchedule(m, loggerStub(t).Sugar(), false, req)
+
+		assert.Nil(t, err)
+		assert.NotNil(t, s)
+		assert.Equal(t, 25.0, s.coins["BTC"].amount)
+		assert.Equal(t, "BTC:USD", s.coins["BTC"].symbol)
+		assert.Equal(t, 25.0, s.coins["ETH"].amount)
+		assert.Equal(t, "ETH:USD", s.coins["ETH"].symbol)
+	})
+
+	t.Run("when unbalanced coins request", func(t *testing.T) {
+		req := syncRequest{every: 24 * time.Hour, orderType: exchanges.Market, autoFund: true, currency: "USD", usd: 50, coins: []string{"BTC:50", "ETH:49"}} // setup run every 24 hrs
+
+		m.EXPECT().GetTickerSymbol("BTC", "USD").Return("BTC:USD")
+		m.EXPECT().GetProduct("BTC:USD").Return(&exchanges.Product{BaseMinSize: 0.001}, nil)
+		m.EXPECT().GetTicker("BTC:USD").Return(&exchanges.Ticker{Price: 1000}, nil)
+
+		m.EXPECT().GetTickerSymbol("ETH", "USD").Return("ETH:USD")
+		m.EXPECT().GetProduct("ETH:USD").Return(&exchanges.Product{BaseMinSize: 0.5}, nil)
+		m.EXPECT().GetTicker("ETH:USD").Return(&exchanges.Ticker{Price: 10}, nil)
+
+		s, err := newGdaxSchedule(m, loggerStub(t).Sugar(), false, req)
+
+		assert.NotNil(t, err)
+		assert.Nil(t, s)
+		assert.Equal(t, "Total percentages must be exactly 100, provided 99", err.Error())
+	})
 }
 
 func TestNewScheduleWhenBelowMinSize(t *testing.T) {
@@ -175,6 +228,92 @@ func TestSyncWhenSuccessful(t *testing.T) {
 	m.EXPECT().GetPendingTransfers("USD").Return([]exchanges.PendingTransfer{}, nil)
 	m.EXPECT().Deposit("USD", 25.0).Return(&now, nil)
 	m.EXPECT().CreateOrder("btcusd", 50.0, exchanges.Market, gomock.Any()).Return(&result, nil)
+
+	err := s.Sync()
+
+	assert.Nil(t, err)
+}
+
+func TestSyncWhenNotSufficientBalanceAndAutoFundIsOff(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockExchange(ctrl)
+
+	s := gdaxSchedule{}
+	s.logger = loggerStub(t).Sugar()
+	s.req = syncRequest{every: 24 * time.Hour, orderType: exchanges.Market, autoFund: false, currency: "USD", usd: 50} // setup run every 24 hrs
+	s.coins = map[string]orderDetails{"BTC": {symbol: "btcusd", amount: 50}}
+	s.sleepFunc = func(d time.Duration) {}
+	s.exchange = m
+
+	m.EXPECT().LastPurchaseTime("BTC", "USD", gomock.Any()).Return(nil, nil)
+	m.EXPECT().GetFiatAccount("USD").Return(&exchanges.Account{Available: 25}, nil)
+	m.EXPECT().GetPendingTransfers("USD").Return([]exchanges.PendingTransfer{}, nil)
+
+	err := s.Sync()
+
+	assert.NotNil(t, err)
+	assert.Equal(t, "No sufficient amount for trade and autofund is disabled. Deposit money to proceed", err.Error())
+}
+
+func TestSyncShouldAskForConfirmationWhenForceIsOn(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockExchange(ctrl)
+
+	s := gdaxSchedule{}
+	s.logger = loggerStub(t).Sugar()
+	s.req = syncRequest{every: 24 * time.Hour, orderType: exchanges.Market, autoFund: false, currency: "USD", usd: 50, force: true} // setup run every 24 hrs
+	s.coins = map[string]orderDetails{"BTC": {symbol: "btcusd", amount: 50}}
+	s.sleepFunc = func(d time.Duration) {}
+	s.exchange = m
+
+	t.Run("when rejected", func(t *testing.T) {
+		s.confirmFunc = func(s string) bool {
+			return false
+		}
+
+		err := s.Sync()
+
+		assert.NotNil(t, err)
+		assert.Equal(t, "User rejected the trade", err.Error())
+	})
+
+	t.Run("when approved", func(t *testing.T) {
+		s.confirmFunc = func(s string) bool {
+			return true
+		}
+
+		result := exchanges.Order{OrderID: "1"}
+
+		m.EXPECT().GetFiatAccount("USD").Return(&exchanges.Account{Available: 50}, nil)
+		m.EXPECT().CreateOrder("btcusd", 50.0, exchanges.Market, gomock.Any()).Return(&result, nil)
+
+		err := s.Sync()
+
+		assert.Nil(t, err)
+	})
+}
+
+func TestSyncWhenDebugIsOn(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockExchange(ctrl)
+
+	s := gdaxSchedule{}
+	s.logger = loggerStub(t).Sugar()
+	s.req = syncRequest{every: 24 * time.Hour, orderType: exchanges.Market, autoFund: true, currency: "USD", usd: 50} // setup run every 24 hrs
+	s.debug = true
+	s.coins = map[string]orderDetails{"BTC": {symbol: "btcusd", amount: 50}}
+	s.sleepFunc = func(d time.Duration) {}
+	s.exchange = m
+
+	m.EXPECT().LastPurchaseTime("BTC", "USD", gomock.Any()).Return(nil, nil)
+	m.EXPECT().GetFiatAccount("USD").Return(&exchanges.Account{Available: 25}, nil)
+	m.EXPECT().GetPendingTransfers("USD").Return([]exchanges.PendingTransfer{}, nil)
 
 	err := s.Sync()
 

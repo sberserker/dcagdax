@@ -39,12 +39,13 @@ type orderDetails struct {
 }
 
 type gdaxSchedule struct {
-	logger    *zap.SugaredLogger
-	exchange  exchanges.Exchange
-	debug     bool
-	req       syncRequest
-	coins     map[string]orderDetails
-	sleepFunc func(time.Duration)
+	logger      *zap.SugaredLogger
+	exchange    exchanges.Exchange
+	debug       bool
+	req         syncRequest
+	coins       map[string]orderDetails
+	sleepFunc   func(time.Duration)
+	confirmFunc func(string) bool
 }
 
 func newGdaxSchedule(
@@ -58,9 +59,10 @@ func newGdaxSchedule(
 		exchange: exchange,
 		debug:    debug,
 
-		req:       syncRequest,
-		coins:     map[string]orderDetails{},
-		sleepFunc: sleep,
+		req:         syncRequest,
+		coins:       map[string]orderDetails{},
+		sleepFunc:   sleep,
+		confirmFunc: askForConfirmation,
 	}
 
 	total := 0
@@ -105,7 +107,7 @@ func newGdaxSchedule(
 	}
 
 	if total != 100 {
-		return nil, fmt.Errorf("selected percentage must be exactly 100, provided %d", total)
+		return nil, fmt.Errorf("Total percentages must be exactly 100, provided %d", total)
 	}
 
 	return &schedule, nil
@@ -144,7 +146,7 @@ func (s *gdaxSchedule) Sync() error {
 			return errors.New("Detected a recent purchase, waiting for next purchase window")
 		}
 	} else {
-		c := askForConfirmation("Force method is used proceed?")
+		c := s.confirmFunc("Force method is used proceed?")
 		if !c {
 			return errors.New("User rejected the trade")
 		}
