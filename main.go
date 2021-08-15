@@ -35,6 +35,11 @@ var (
 		"How much USD to spend on each purchase. If unspecified, the minimum purchase amount allowed will be used.",
 	).Float()
 
+	currency = kingpin.Flag(
+		"currency",
+		"USD, EUR etc",
+	).Default("USD").String()
+
 	after = registerDate(kingpin.Flag(
 		"after",
 		"Start executing trades after this date, e.g. 2017-12-31.",
@@ -103,20 +108,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	req := syncRequest{
+		autoFund:    *autoFund,
+		usd:         *usd,
+		orderType:   oType,
+		orderSpread: *orderSpread,
+		fee:         *fee,
+		every:       *every,
+		until:       *until,
+		after:       *after,
+		coins:       *coins,
+		force:       *force,
+		currency:    *currency,
+	}
+
 	schedule, err := newGdaxSchedule(
 		exchange,
 		logger,
 		!*makeTrades,
-		*autoFund,
-		*usd,
-		oType,
-		*orderSpread,
-		*fee,
-		*every,
-		*until,
-		*after,
-		*coins,
-		*force,
+		req,
 	)
 
 	if err != nil {

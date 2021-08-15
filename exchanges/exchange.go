@@ -1,5 +1,7 @@
 package exchanges
 
+//go:generate mockgen -destination=../mocks/mock_exchange.go -package=mocks github.com/sberserker/dcagdax/exchanges Exchange
+
 import (
 	"time"
 
