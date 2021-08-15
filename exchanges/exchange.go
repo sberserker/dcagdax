@@ -13,7 +13,7 @@ type Exchange interface {
 
 	GetTicker(productId string) (*Ticker, error)
 
-	GetProduct(productId string) (Product, error)
+	GetProduct(productId string) (*Product, error)
 
 	Deposit(currency string, amount float64) (*time.Time, error)
 

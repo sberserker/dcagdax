@@ -68,16 +68,16 @@ func (f *Ftx) GetTicker(productId string) (*Ticker, error) {
 	return &Ticker{Price: price}, nil
 }
 
-func (f *Ftx) GetProduct(productId string) (Product, error) {
+func (f *Ftx) GetProduct(productId string) (*Product, error) {
 	m, err := f.client.Markets.GetMarketByName(productId)
 
 	if err != nil {
-		return Product{}, err
+		return nil, err
 	}
 
 	minZise, _ := m.MinProvideSize.Float64()
 
-	return Product{
+	return &Product{
 		QuoteCurrency: m.QuoteCurrency,
 		BaseCurrency:  m.BaseCurrency,
 		BaseMinSize:   minZise,

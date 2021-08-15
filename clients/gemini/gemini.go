@@ -85,33 +85,16 @@ func (api *Api) request(verb, url string, params map[string]interface{}) ([]byte
 		fmt.Sprintf("resp:%v", resp),
 	)
 
-	if resp.StatusCode != 200 {
-		statusCode := fmt.Sprintf("HTTP Status Code: %d", resp.StatusCode)
-		if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-			return nil, fmt.Errorf("%s\n%s", statusCode, "API entry point has moved, see Location: header. Most likely an http: to https: redirect.")
-		} else if resp.StatusCode == 400 {
-			return nil, fmt.Errorf("%s\n%s", statusCode, "Auction not open or paused, ineligible timing, market not open, or the request was malformed; in the case of a private API request, missing or malformed Gemini private API authentication headers")
-		} else if resp.StatusCode == 403 {
-			return nil, fmt.Errorf("%s\n%s", statusCode, "The API key is missing the role necessary to access this private API endpoint")
-		} else if resp.StatusCode == 404 {
-			return nil, fmt.Errorf("%s\n%s", statusCode, "Unknown API entry point or Order not found")
-		} else if resp.StatusCode == 406 {
-			return nil, fmt.Errorf("%s\n%s", statusCode, "Insufficient Funds")
-		} else if resp.StatusCode == 429 {
-			return nil, fmt.Errorf("%s\n%s", statusCode, "Rate Limiting was applied")
-		} else if resp.StatusCode == 500 {
-			return nil, fmt.Errorf("%s\n%s", statusCode, "The server encountered an error")
-		} else if resp.StatusCode == 502 {
-			return nil, fmt.Errorf("%s\n%s", statusCode, "Technical issues are preventing the request from being satisfied")
-		} else if resp.StatusCode == 503 {
-			return nil, fmt.Errorf("%s\n%s", statusCode, "The exchange is down for maintenance")
-		}
-	}
-
 	// read response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	//unsuccessful status code
+	if resp.StatusCode > 299 {
+		statusCode := fmt.Sprintf("HTTP Status Code: %d", resp.StatusCode)
+		return nil, fmt.Errorf("%s\n%s", statusCode, body)
 	}
 
 	logger.Debug("func request: Http Client body",

@@ -3,6 +3,7 @@ package exchanges
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -21,11 +22,11 @@ func NewGemini() (*Gemini, error) {
 	secret := os.Getenv("GEMINI_SECRET")
 
 	if key == "" {
-		return nil, errors.New("GEMINI_API_KEY environment variable is required")
+		return nil, errors.New("GEMINI_KEY environment variable is required")
 	}
 
 	if secret == "" {
-		return nil, errors.New("GEMINI_API_SECRET environment variable is required")
+		return nil, errors.New("GEMINI_SECRET environment variable is required")
 	}
 
 	api := gemini.New(
@@ -55,13 +56,13 @@ func (g *Gemini) GetTicker(productId string) (*Ticker, error) {
 	}, nil
 }
 
-func (g *Gemini) GetProduct(productId string) (Product, error) {
+func (g *Gemini) GetProduct(productId string) (*Product, error) {
 	symbol, err := g.client.SymbolDetails(productId)
 	if err != nil {
-		return Product{}, err
+		return nil, err
 	}
 
-	return Product{
+	return &Product{
 		QuoteCurrency: symbol.QuoteCurrency,
 		BaseCurrency:  symbol.BaseCurrency,
 		BaseMinSize:   symbol.MinOrderSize,
@@ -80,12 +81,20 @@ func (g *Gemini) CreateOrder(productId string, amount float64, orderType OrderTy
 		return nil, errors.New("gemini exchange api does not support marker order type")
 	}
 
+	symbol, err := g.client.SymbolDetails(productId)
+	if err != nil {
+		return nil, err
+	}
+
 	ticker, err := g.client.TickerV2(productId)
 	if err != nil {
 		return nil, err
 	}
 
 	orderPrice, orderSize := limitOrderFunc(decimal.NewFromFloat(ticker.Ask), decimal.NewFromFloat(amount))
+
+	//symbol.TickSize apply precision to order size
+	orderSize = orderSize.Truncate(decimalPrecision(symbol.TickSize))
 	orderPricef, _ := orderPrice.Float64()
 	orderSizef, _ := orderSize.Float64()
 
@@ -103,6 +112,7 @@ func (g *Gemini) CreateOrder(productId string, amount float64, orderType OrderTy
 }
 
 func (g *Gemini) LastPurchaseTime(ticker string, currency string, since time.Time) (*time.Time, error) {
+	product := g.GetTickerSymbol(ticker, currency)
 	//past trades history for a given symbol
 	//they go in opposite order
 	args := gemini.Args{}
@@ -110,7 +120,7 @@ func (g *Gemini) LastPurchaseTime(ticker string, currency string, since time.Tim
 
 	lastTransactionTime := time.Time{}
 
-	trades, err := g.client.PastTrades(ticker, args)
+	trades, err := g.client.PastTrades(product, args)
 	if err != nil {
 		return nil, err
 	}
@@ -149,4 +159,13 @@ func (g *Gemini) GetFiatAccount(currency string) (*Account, error) {
 //this is not something gemini can profide
 func (g *Gemini) GetPendingTransfers(currency string) ([]PendingTransfer, error) {
 	return []PendingTransfer{}, nil
+}
+
+func decimalPrecision(n float64) int32 {
+	if n > 1 {
+		return 0
+	}
+
+	res := math.Floor(math.Log10(n)) * -1
+	return int32(res)
 }

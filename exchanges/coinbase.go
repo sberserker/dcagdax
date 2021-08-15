@@ -90,14 +90,14 @@ func (c *Coinbase) GetTicker(productId string) (*Ticker, error) {
 	return &Ticker{Price: ticker.Price}, nil
 }
 
-func (c *Coinbase) GetProduct(productId string) (Product, error) {
+func (c *Coinbase) GetProduct(productId string) (*Product, error) {
 	product, err := c.client.GetProduct(productId)
 
 	if err != nil {
-		return Product{}, err
+		return nil, err
 	}
 
-	return Product{
+	return &Product{
 		QuoteCurrency: product.QuoteCurrency,
 		BaseCurrency:  product.BaseCurrency,
 		BaseMinSize:   product.BaseMinSize,
