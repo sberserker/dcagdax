@@ -103,20 +103,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	req := syncRequest{
+		autoFund:    *autoFund,
+		usd:         *usd,
+		orderType:   oType,
+		orderSpread: *orderSpread,
+		fee:         *fee,
+		every:       *every,
+		until:       *until,
+		after:       *after,
+		coins:       *coins,
+		force:       *force,
+		currency:    "USD",
+	}
+
 	schedule, err := newGdaxSchedule(
 		exchange,
 		logger,
 		!*makeTrades,
-		*autoFund,
-		*usd,
-		oType,
-		*orderSpread,
-		*fee,
-		*every,
-		*until,
-		*after,
-		*coins,
-		*force,
+		req,
 	)
 
 	if err != nil {

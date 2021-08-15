@@ -19,20 +19,7 @@ import (
 
 var skippedForDebug = errors.New("Skipping because trades are not enabled")
 
-const (
-	Currency = "USD"
-)
-
-type orderDetails struct {
-	symbol string
-	amount float64
-}
-
-type gdaxSchedule struct {
-	logger   *zap.SugaredLogger
-	exchange exchanges.Exchange
-	debug    bool
-
+type syncRequest struct {
 	usd         float64
 	orderSpread float64
 	orderType   exchanges.OrderTypeType
@@ -41,45 +28,44 @@ type gdaxSchedule struct {
 	until       time.Time
 	after       time.Time
 	autoFund    bool
-	coins       map[string]orderDetails
 	force       bool
+	coins       []string
+	currency    string
+}
+
+type orderDetails struct {
+	symbol string
+	amount float64
+}
+
+type gdaxSchedule struct {
+	logger    *zap.SugaredLogger
+	exchange  exchanges.Exchange
+	debug     bool
+	req       syncRequest
+	coins     map[string]orderDetails
+	sleepFunc func(time.Duration)
 }
 
 func newGdaxSchedule(
 	exchange exchanges.Exchange,
 	l *zap.SugaredLogger,
 	debug bool,
-	autoFund bool,
-	usd float64,
-	orderType exchanges.OrderTypeType,
-	orderSpread float64,
-	fee float64,
-	every time.Duration,
-	until time.Time,
-	after time.Time,
-	coins []string,
-	force bool,
+	syncRequest syncRequest,
 ) (*gdaxSchedule, error) {
 	schedule := gdaxSchedule{
 		logger:   l,
 		exchange: exchange,
 		debug:    debug,
 
-		orderSpread: orderSpread,
-		orderType:   orderType,
-		fee:         fee,
-		usd:         usd,
-		every:       every,
-		until:       until,
-		after:       after,
-		autoFund:    autoFund,
-		coins:       map[string]orderDetails{},
-		force:       force,
+		req:       syncRequest,
+		coins:     map[string]orderDetails{},
+		sleepFunc: sleep,
 	}
 
 	total := 0
 
-	for _, c := range coins {
+	for _, c := range syncRequest.coins {
 		arr := strings.Split(c, ":")
 		coin := arr[0]
 		percentage, err := strconv.Atoi(arr[1])
@@ -89,19 +75,19 @@ func newGdaxSchedule(
 
 		total += int(percentage)
 
-		symbol := exchange.GetTickerSymbol(coin, Currency)
+		symbol := exchange.GetTickerSymbol(coin, schedule.req.currency)
 		minimum, err := schedule.minimumUSDPurchase(symbol)
 
 		if err != nil {
 			return nil, err
 		}
 
-		if schedule.usd == 0.0 {
-			schedule.usd = minimum + 0.1
+		if schedule.req.usd == 0.0 {
+			schedule.req.usd = minimum + 0.1
 		}
 
 		//schedule.usd * percentage / 100
-		scheduledForCoin, _ := decimal.NewFromFloat(usd).Mul(decimal.NewFromFloat(float64(percentage))).Div(decimal.NewFromFloat(100)).Truncate(2).Float64()
+		scheduledForCoin, _ := decimal.NewFromFloat(schedule.req.usd).Mul(decimal.NewFromFloat(float64(percentage))).Div(decimal.NewFromFloat(100)).Truncate(2).Float64()
 
 		order := orderDetails{
 			symbol: symbol,
@@ -130,7 +116,7 @@ func (s *gdaxSchedule) Sync() error {
 
 	now := time.Now()
 
-	until := s.until
+	until := s.req.until
 	if until.IsZero() {
 		until = time.Now()
 	}
@@ -139,19 +125,19 @@ func (s *gdaxSchedule) Sync() error {
 		return errors.New("Deadline has passed, not taking any action")
 	}
 
-	if !s.after.IsZero() && !now.After(s.after) {
-		return fmt.Errorf("Configured to start after %s, not taking any action", s.after)
+	if !s.req.after.IsZero() && !now.After(s.req.after) {
+		return fmt.Errorf("Configured to start after %s, not taking any action", s.req.after)
 	}
 
 	s.logger.Infow("Dollar cost averaging",
-		Currency, s.usd,
+		s.req.currency, s.req.usd,
 		"every", every,
 		"until", until.String(),
 	)
 
 	since := now.Add(-*every)
 
-	if s.force != true {
+	if s.req.force != true {
 		if time, err := s.timeToPurchase(since); err != nil {
 			return err
 		} else if !time {
@@ -186,7 +172,7 @@ func (s *gdaxSchedule) Sync() error {
 			"needed", needed,
 		)
 
-		if !s.autoFund {
+		if !s.req.autoFund {
 			return errors.New("No sufficient amount for trade and autofund is disabled. Deposit money to proceed")
 		}
 
@@ -202,7 +188,7 @@ func (s *gdaxSchedule) Sync() error {
 				"Sleeping for",
 				"minutes", waitTime.Minutes(),
 			)
-			time.Sleep(waitTime)
+			s.sleepFunc(waitTime)
 		} else {
 			s.logger.Infow(
 				"Deposit money will ba available in. Exiting now",
@@ -278,7 +264,7 @@ func (s *gdaxSchedule) timeToPurchase(since time.Time) (bool, error) {
 		"hours", timeSinceLastPurchase.Hours(),
 	)
 
-	if timeSinceLastPurchase.Seconds() < s.every.Seconds() {
+	if timeSinceLastPurchase.Seconds() < s.req.every.Seconds() {
 		// We purchased something recently, so hang tight.
 		return false, nil
 	}
@@ -287,12 +273,12 @@ func (s *gdaxSchedule) timeToPurchase(since time.Time) (bool, error) {
 }
 
 func (s *gdaxSchedule) additionalUsdNeeded() (float64, error) {
-	usdAccount, err := s.exchange.GetFiatAccount(Currency)
+	usdAccount, err := s.exchange.GetFiatAccount(s.req.currency)
 	if err != nil {
 		return 0, err
 	}
 
-	if usdAccount.Available >= s.usd {
+	if usdAccount.Available >= s.req.usd {
 		return 0, nil
 	}
 
@@ -305,13 +291,13 @@ func (s *gdaxSchedule) additionalUsdNeeded() (float64, error) {
 
 	//account may have some fraction of cents from previous trading so cut everything after 0.01
 	//s.usd - availableBalance
-	dollarsNeeded, _ := decimal.NewFromFloat(s.usd).Sub(availableBalance).Truncate(2).Float64()
+	dollarsNeeded, _ := decimal.NewFromFloat(s.req.usd).Sub(availableBalance).Truncate(2).Float64()
 
 	return dollarsNeeded, nil
 }
 
 func (s *gdaxSchedule) pendingTransfers() (float64, error) {
-	transfers, err := s.exchange.GetPendingTransfers(Currency)
+	transfers, err := s.exchange.GetPendingTransfers(s.req.currency)
 	if err != nil {
 		return 0, err
 	}
@@ -338,7 +324,7 @@ func (s *gdaxSchedule) timeSinceLastPurchase(since time.Time) (*time.Duration, e
 		coins = append(coins, k)
 	}
 
-	lastPurchaseTime, err := s.exchange.LastPurchaseTime(coins[0], Currency, since) //taking the first coins a marker, make sure to put your main coin first
+	lastPurchaseTime, err := s.exchange.LastPurchaseTime(coins[0], s.req.currency, since) //taking the first coins a marker, make sure to put your main coin first
 
 	if err != nil {
 		return nil, err
@@ -366,7 +352,7 @@ func (s *gdaxSchedule) makePurchase(productId string, amount float64) error {
 		return skippedForDebug
 	}
 
-	order, err := s.exchange.CreateOrder(productId, amount, s.orderType, s.calcLimitOrder)
+	order, err := s.exchange.CreateOrder(productId, amount, s.req.orderType, s.calcLimitOrder)
 
 	if err != nil {
 		return err
@@ -382,7 +368,7 @@ func (s *gdaxSchedule) makePurchase(productId string, amount float64) error {
 
 func (s *gdaxSchedule) makeDeposit(amount float64) (*time.Time, error) {
 
-	payoutAt, err := s.exchange.Deposit(Currency, amount)
+	payoutAt, err := s.exchange.Deposit(s.req.currency, amount)
 
 	if err != nil {
 		return nil, err
@@ -421,9 +407,9 @@ func (s *gdaxSchedule) calcLimitOrder(askPrice decimal.Decimal, fiatAmount decim
 
 	//reduce fiat Amount to include fees %
 	//(1-fee)/100 * fiatAmount
-	fiatAmount = decimal.NewFromFloat((100 - s.fee) / 100).Mul(fiatAmount)
+	fiatAmount = decimal.NewFromFloat((100 - s.req.fee) / 100).Mul(fiatAmount)
 
-	spread := decimal.NewFromFloat(s.orderSpread)
+	spread := decimal.NewFromFloat(s.req.orderSpread)
 
 	//calc order price
 	//ask * spread / 100 + ask
@@ -440,4 +426,8 @@ func (s *gdaxSchedule) calcLimitOrder(askPrice decimal.Decimal, fiatAmount decim
 	)
 
 	return orderPrice, orderSize
+}
+
+func sleep(waitTime time.Duration) {
+	time.Sleep(waitTime)
 }

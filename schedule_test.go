@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/sberserker/dcagdax/exchanges"
 	"github.com/sberserker/dcagdax/mocks"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
@@ -37,8 +38,7 @@ func TestCalcLimitOrder(t *testing.T) {
 
 	for _, tc := range tests {
 		s := gdaxSchedule{}
-		s.fee = tc.fee
-		s.orderSpread = tc.spread
+		s.req = syncRequest{fee: tc.fee, orderSpread: tc.spread}
 		s.logger = loggerStub(t).Sugar()
 
 		orderPrice, orderSize := s.calcLimitOrder(decimal.NewFromFloat(tc.askPrice), decimal.NewFromFloat(tc.fiatAmout))
@@ -70,8 +70,7 @@ func TestSyncWhenNotAGoodTime(t *testing.T) {
 	for _, tc := range tests {
 		s := gdaxSchedule{}
 		s.logger = loggerStub(t).Sugar()
-		s.until = tc.until
-		s.after = tc.after
+		s.req = syncRequest{until: tc.until, after: tc.after}
 
 		err := s.Sync()
 
@@ -87,8 +86,8 @@ func TestWhenRecentPurchase(t *testing.T) {
 
 	s := gdaxSchedule{}
 	s.logger = loggerStub(t).Sugar()
-	s.every = 24 * time.Hour // setup run every 24 hrs
-	s.coins = map[string]orderDetails{"BTC": orderDetails{}}
+	s.req = syncRequest{every: 24 * time.Hour} // setup run every 24 hrs
+	s.coins = map[string]orderDetails{"BTC": {}}
 	s.exchange = m
 
 	t.Run("when recent purchase", func(t *testing.T) {
@@ -110,5 +109,31 @@ func TestWhenRecentPurchase(t *testing.T) {
 
 		assert.Equal(t, "some error", err.Error())
 	})
+}
 
+func TestSyncWhenSuccessful(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockExchange(ctrl)
+
+	s := gdaxSchedule{}
+	s.logger = loggerStub(t).Sugar()
+	s.req = syncRequest{every: 24 * time.Hour, orderType: exchanges.Market, autoFund: true, currency: "USD", usd: 50} // setup run every 24 hrs
+	s.coins = map[string]orderDetails{"BTC": {symbol: "btcusd", amount: 50}}
+	s.sleepFunc = func(d time.Duration) {}
+	s.exchange = m
+
+	now := time.Now()
+	result := exchanges.Order{OrderID: "1"}
+
+	m.EXPECT().LastPurchaseTime("BTC", "USD", gomock.Any()).Return(nil, nil)
+	m.EXPECT().GetFiatAccount("USD").Return(&exchanges.Account{Available: 25}, nil)
+	m.EXPECT().GetPendingTransfers("USD").Return([]exchanges.PendingTransfer{}, nil)
+	m.EXPECT().Deposit("USD", 25.0).Return(&now, nil)
+	m.EXPECT().CreateOrder("btcusd", 50.0, exchanges.Market, gomock.Any()).Return(&result, nil)
+
+	err := s.Sync()
+
+	assert.Nil(t, err)
 }
