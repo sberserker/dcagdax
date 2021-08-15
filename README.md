@@ -1,4 +1,4 @@
-# DCA Coinbase
+# DCA Coinbase, Ftx, Gemini
 
 Automated dollar cost averaging for BTC, LTC, BCH and ETH on Coinbase.
 Inspired by https://github.com/blampe/dcagdax
@@ -10,6 +10,7 @@ Added the following features
 - added after flag
 - added support for geminit and ftx/ftx.us exchanges
 - added limit order type support
+- added some unit tests
 
 Note Ftx and Gemini do not support funding over api at the moment. Autofund periodically manually if you plan to use those exchanges.
 Ftx and Gemini do not support market order type. Use limit order type with the following flags to successfully execute trade. 
@@ -150,11 +151,17 @@ as part of your deployment!
 
 **A:** BTC 1KZhfEWkwH8A7L1Dm9MoHwUKkrEEHrFjgB
 
+
 ## Development references
 
 ### Unit tests
 Generate mocks
 ```
 go generate ./...
+```
+Run unit tests and get coverage
+```
+go test github.com/sberserker/dcagdax github.com/sberserker/dcagdax/exchanges  -coverprofile coverage.out
+go tool cover -html=coverage.out -o coverage.html
 ```
 

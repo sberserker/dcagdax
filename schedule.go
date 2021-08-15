@@ -98,7 +98,7 @@ func newGdaxSchedule(
 
 		if scheduledForCoin < minimum {
 			return nil, fmt.Errorf(
-				"Coinbase minimum %s trade amount is $%.02f, but you're trying to purchase $%f",
+				"Coinbase minimum %s trade amount is $%.02f, but you're trying to purchase $%0.2f",
 				coin, minimum, scheduledForCoin,
 			)
 		}

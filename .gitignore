@@ -4,3 +4,4 @@ dcagdax.exe
 .vscode
 *.bat
 .env
+coverage.*

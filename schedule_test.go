@@ -86,7 +86,7 @@ func TestWhenRecentPurchase(t *testing.T) {
 
 	s := gdaxSchedule{}
 	s.logger = loggerStub(t).Sugar()
-	s.req = syncRequest{every: 24 * time.Hour} // setup run every 24 hrs
+	s.req = syncRequest{every: 24 * time.Hour, currency: "USD"} // setup run every 24 hrs
 	s.coins = map[string]orderDetails{"BTC": {}}
 	s.exchange = m
 
@@ -109,6 +109,49 @@ func TestWhenRecentPurchase(t *testing.T) {
 
 		assert.Equal(t, "some error", err.Error())
 	})
+}
+
+func TestNewSchedule(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockExchange(ctrl)
+	req := syncRequest{every: 24 * time.Hour, orderType: exchanges.Market, autoFund: true, currency: "USD", usd: 50, coins: []string{"BTC:50", "ETH:50"}} // setup run every 24 hrs
+
+	m.EXPECT().GetTickerSymbol("BTC", "USD").Return("BTC:USD")
+	m.EXPECT().GetProduct("BTC:USD").Return(&exchanges.Product{BaseMinSize: 0.001}, nil)
+	m.EXPECT().GetTicker("BTC:USD").Return(&exchanges.Ticker{Price: 1000}, nil)
+
+	m.EXPECT().GetTickerSymbol("ETH", "USD").Return("ETH:USD")
+	m.EXPECT().GetProduct("ETH:USD").Return(&exchanges.Product{BaseMinSize: 0.5}, nil)
+	m.EXPECT().GetTicker("ETH:USD").Return(&exchanges.Ticker{Price: 10}, nil)
+
+	s, err := newGdaxSchedule(m, loggerStub(t).Sugar(), false, req)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, s)
+	assert.Equal(t, 25.0, s.coins["BTC"].amount)
+	assert.Equal(t, "BTC:USD", s.coins["BTC"].symbol)
+	assert.Equal(t, 25.0, s.coins["ETH"].amount)
+	assert.Equal(t, "ETH:USD", s.coins["ETH"].symbol)
+}
+
+func TestNewScheduleWhenBelowMinSize(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockExchange(ctrl)
+	req := syncRequest{every: 24 * time.Hour, orderType: exchanges.Market, autoFund: true, currency: "USD", usd: 50, coins: []string{"BTC:50"}} // setup run every 24 hrs
+
+	m.EXPECT().GetTickerSymbol("BTC", "USD").Return("BTC:USD")
+	m.EXPECT().GetProduct("BTC:USD").Return(&exchanges.Product{BaseMinSize: 0.01}, nil)
+	m.EXPECT().GetTicker("BTC:USD").Return(&exchanges.Ticker{Price: 10000}, nil)
+
+	s, err := newGdaxSchedule(m, loggerStub(t).Sugar(), false, req)
+
+	assert.Nil(t, s)
+	assert.NotNil(t, err)
+	assert.Equal(t, "Coinbase minimum BTC trade amount is $100.00, but you're trying to purchase $25.00", err.Error())
 }
 
 func TestSyncWhenSuccessful(t *testing.T) {
