@@ -2,6 +2,6 @@ dcagdax
 vendor
 dcagdax.exe
 .vscode
-*.bat
+run.bat
 .env
 coverage.*
