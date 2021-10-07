@@ -116,7 +116,7 @@ func (g *Gemini) LastPurchaseTime(ticker string, currency string, since time.Tim
 	//past trades history for a given symbol
 	//they go in opposite order
 	args := gemini.Args{}
-	args["limit_trades"] = 10
+	args["timestamp"] = since
 
 	lastTransactionTime := time.Time{}
 
