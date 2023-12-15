@@ -1,8 +1,8 @@
-FROM golang:1.16.2-alpine3.13 as build
+FROM golang:1.21.5-alpine3.19 as build
 
 WORKDIR /src/
 
-COPY go.mod . 
+COPY go.mod .
 COPY go.sum .
 RUN go mod download
 
@@ -12,7 +12,7 @@ COPY exchanges exchanges
 
 RUN GOOS=linux GOARCH=amd64 go build -o /go/bin/  ./...
 
-FROM alpine:3.13.2
+FROM alpine:3.19.0
 
 RUN apk update && \
     apk add --no-cache tzdata

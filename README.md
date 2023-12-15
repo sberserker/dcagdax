@@ -13,14 +13,14 @@ Added the following features
 - added some unit tests
 
 Note Ftx and Gemini do not support funding over api at the moment. Autofund periodically manually if you plan to use those exchanges.
-Ftx and Gemini do not support market order type. Use limit order type with the following flags to successfully execute trade. 
+Ftx and Gemini do not support market order type. Use limit order type with the following flags to successfully execute trade.
 ```
 --type limit
 --spread % to increase ask price to accommodate possible price fluctuation when order is placed. Default: 1
 --fee % for exchange commission typically 0.1-0.5 for most exchanges depends on fee exchange and fee tier. Default 0.5
 ```
-Limit order may spend a little less every purchase to accommodate spread and fee. 
-Unused portion will be left on exchange and included into a next order. 
+Limit order may spend a little less every purchase to accommodate spread and fee.
+Unused portion will be left on exchange and included into a next order.
 ## Setup
 
 If you only have a Coinbase account you'll need to also sign into
@@ -69,7 +69,6 @@ For Coinbase
 ```
 $ COINBASE_SECRET=secret \
   COINBASE_KEY=key \
-  COINBASE_PASSPHRASE=pass \
   ./dcagdax --help
 ```
 
@@ -91,14 +90,14 @@ Be aware that if you set your purchase amount near 0.01 BTC (the minimum trade
 amount) then an upswing in price might prevent you from trading.
 
 ## Run in Docker
-The application can run in docker with cron. 
+The application can run in docker with cron.
 Create env file with the following format
 ```
 COINBASE_SECRET=secret
 COINBASE_KEY=key
-COINBASE_PASSPHRASE=pass
+
 ```
-Adjust cron.conf as you wish. Note this will run the cointainer in foreground. To detach: Ctrl+P+Q 
+Adjust cron.conf as you wish. Note this will run the cointainer in foreground. To detach: Ctrl+P+Q
 Timezone is optionalal -e TZ=... and added for convenience by default cron will run in UTC timezone
 ```
 docker build -t dcagdax .
@@ -108,7 +107,7 @@ docker run -t -i --name dcagdax -e TZ=America/Los_Angeles  --env-file .env dcagd
 Run docker with automatic start
 ```
 docker run -t -i --name dcagdax -e TZ=America/Los_Angeles  --env-file .env --restart unless-stopped dcagdax
-``` 
+```
 
 Follow container output
 ```

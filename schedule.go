@@ -43,6 +43,7 @@ type gdaxSchedule struct {
 	exchange    exchanges.Exchange
 	debug       bool
 	req         syncRequest
+	markerCoin  string // first coin which will be used as a marker if purchase was made recently
 	coins       map[string]orderDetails
 	sleepFunc   func(time.Duration)
 	confirmFunc func(string) bool
@@ -70,6 +71,9 @@ func newGdaxSchedule(
 	for _, c := range syncRequest.coins {
 		arr := strings.Split(c, ":")
 		coin := arr[0]
+		if schedule.markerCoin == "" {
+			schedule.markerCoin = coin
+		}
 		percentage, err := strconv.Atoi(arr[1])
 		if err != nil {
 			return &schedule, err
@@ -137,9 +141,8 @@ func (s *gdaxSchedule) Sync() error {
 		"until", until.String(),
 	)
 
-	since := now.Add(-*every)
-
 	if s.req.force != true {
+		since := now.Add(-*every)
 		if time, err := s.timeToPurchase(since); err != nil {
 			return err
 		} else if !time {
@@ -321,12 +324,7 @@ func (s *gdaxSchedule) pendingTransfers() (float64, error) {
 }
 
 func (s *gdaxSchedule) timeSinceLastPurchase(since time.Time) (*time.Duration, error) {
-	coins := make([]string, 0, len(s.coins))
-	for k := range s.coins {
-		coins = append(coins, k)
-	}
-
-	lastPurchaseTime, err := s.exchange.LastPurchaseTime(coins[0], s.req.currency, since) //taking the first coins a marker, make sure to put your main coin first
+	lastPurchaseTime, err := s.exchange.LastPurchaseTime(s.markerCoin, s.req.currency, since) //taking the first coins a marker, make sure to put your main coin first
 
 	if err != nil {
 		return nil, err

@@ -142,7 +142,7 @@ func main() {
 func initExchange(exType string) (exchange exchanges.Exchange, err error) {
 	switch exType {
 	case "coinbase":
-		exchange, err = exchanges.NewCoinbase()
+		exchange, err = exchanges.NewCoinbaseV3()
 	case "gemini":
 		exchange, err = exchanges.NewGemini()
 	case "ftxus":

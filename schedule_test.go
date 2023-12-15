@@ -87,7 +87,7 @@ func TestWhenRecentPurchase(t *testing.T) {
 	s := gdaxSchedule{}
 	s.logger = loggerStub(t).Sugar()
 	s.req = syncRequest{every: 24 * time.Hour, currency: "USD"} // setup run every 24 hrs
-	s.coins = map[string]orderDetails{"BTC": {}}
+	s.markerCoin = "BTC"
 	s.exchange = m
 
 	t.Run("when recent purchase", func(t *testing.T) {
@@ -119,7 +119,7 @@ func TestTimeToPurchase(t *testing.T) {
 	s := gdaxSchedule{}
 	s.logger = loggerStub(t).Sugar()
 	s.req = syncRequest{every: 24 * time.Hour, currency: "USD"} // setup run every 24 hrs
-	s.coins = map[string]orderDetails{"BTC": {}}
+	s.markerCoin = "BTC"
 	s.exchange = m
 
 	t.Run("when recent purchase", func(t *testing.T) {
@@ -217,6 +217,7 @@ func TestSyncWhenSuccessful(t *testing.T) {
 	s.logger = loggerStub(t).Sugar()
 	s.req = syncRequest{every: 24 * time.Hour, orderType: exchanges.Market, autoFund: true, currency: "USD", usd: 50} // setup run every 24 hrs
 	s.coins = map[string]orderDetails{"BTC": {symbol: "btcusd", amount: 50}}
+	s.markerCoin = "BTC"
 	s.sleepFunc = func(d time.Duration) {}
 	s.exchange = m
 
@@ -244,6 +245,7 @@ func TestSyncWhenNotSufficientBalanceAndAutoFundIsOff(t *testing.T) {
 	s.logger = loggerStub(t).Sugar()
 	s.req = syncRequest{every: 24 * time.Hour, orderType: exchanges.Market, autoFund: false, currency: "USD", usd: 50} // setup run every 24 hrs
 	s.coins = map[string]orderDetails{"BTC": {symbol: "btcusd", amount: 50}}
+	s.markerCoin = "BTC"
 	s.sleepFunc = func(d time.Duration) {}
 	s.exchange = m
 
@@ -307,6 +309,7 @@ func TestSyncWhenDebugIsOn(t *testing.T) {
 	s.logger = loggerStub(t).Sugar()
 	s.req = syncRequest{every: 24 * time.Hour, orderType: exchanges.Market, autoFund: true, currency: "USD", usd: 50} // setup run every 24 hrs
 	s.debug = true
+	s.markerCoin = "BTC"
 	s.coins = map[string]orderDetails{"BTC": {symbol: "btcusd", amount: 50}}
 	s.sleepFunc = func(d time.Duration) {}
 	s.exchange = m

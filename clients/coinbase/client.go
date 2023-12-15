@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,20 +14,16 @@ import (
 )
 
 type Client struct {
-	BaseURL    string
-	Secret     string
-	Key        string
-	Passphrase string
+	BaseURL string
+	Secret  string
+	Key     string
 }
 
 func NewClient(secret, key, passphrase string) *Client {
 	client := Client{
-		//BaseURL:    "https://api.gdax.com",
-		//BaseURL: "https://api-public.sandbox.pro.coinbase.com",
-		BaseURL:    "https://api.pro.coinbase.com",
-		Secret:     secret,
-		Key:        key,
-		Passphrase: passphrase,
+		BaseURL: "https://api.pro.coinbase.com",
+		Secret:  secret,
+		Key:     key,
 	}
 
 	return &client
@@ -54,6 +50,7 @@ func (c *Client) Request(method string, url string,
 	}
 
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	//timestamp = "1702537003"
 
 	// XXX: Sandbox time is off right now
 	if os.Getenv("TEST_COINBASE_OFFSET") != "" {
@@ -69,10 +66,10 @@ func (c *Client) Request(method string, url string,
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("User-Agent", "Baylatent Bot 2.0")
 	req.Header.Add("CB-ACCESS-KEY", c.Key)
-	req.Header.Add("CB-ACCESS-PASSPHRASE", c.Passphrase)
+	req.Header.Add("CB-VERSION", "2015-07-22")
 	req.Header.Add("CB-ACCESS-TIMESTAMP", timestamp)
 
-	message := fmt.Sprintf("%s%s%s%s", timestamp, method, url,
+	message := fmt.Sprintf("%s%s/v2%s%s", timestamp, method, url,
 		string(data))
 
 	sig, err := c.generateSig(message, c.Secret)
@@ -88,7 +85,7 @@ func (c *Client) Request(method string, url string,
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode != 200 {
+	if res.StatusCode != 200 && res.StatusCode != 201 {
 		defer res.Body.Close()
 		coinbaseError := Error{}
 		decoder := json.NewDecoder(res.Body)
@@ -110,16 +107,13 @@ func (c *Client) Request(method string, url string,
 }
 
 func (c *Client) generateSig(message, secret string) (string, error) {
-	key, err := base64.StdEncoding.DecodeString(secret)
-	if err != nil {
-		return "", err
-	}
+	key := []byte(secret)
+	messageBytes := []byte(message)
 
-	signature := hmac.New(sha256.New, key)
-	_, err = signature.Write([]byte(message))
-	if err != nil {
-		return "", err
-	}
+	hash := hmac.New(sha256.New, key)
+	hash.Write(messageBytes)
 
-	return base64.StdEncoding.EncodeToString(signature.Sum(nil)), nil
+	digest := hash.Sum(nil)
+
+	return hex.EncodeToString(digest), nil
 }

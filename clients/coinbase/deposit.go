@@ -1,53 +1,68 @@
 package coinbase
 
+import (
+	"fmt"
+	"time"
+)
+
+type ListPaymentMethod struct {
+	Data []PaymentMethod `json:"data"`
+}
+
 type PaymentMethod struct {
-	ID        string `json:"id"`
-	CreatedAt Time   `json:"created_at,string"`
-	UpdatedAt Time   `json:"updated_at,string"`
-	Type      string `json:"type"`
-	Name      string `json:"name"`
-	Currency  string `json:"currency"`
+	ID        string    `json:"id"`
+	CreatedAt time.Time `json:"created_at,string"`
+	UpdatedAt time.Time `json:"updated_at,string"`
+	Type      string    `json:"type"`
+	Name      string    `json:"name"`
+	Currency  string    `json:"currency"`
 }
 
 type DepositParams struct {
 	Amount          float64 `json:"amount,string"`
 	Currency        string  `json:"currency"`
-	PaymentMethodID string  `json:"payment_method_id"`
+	PaymentMethodID string  `json:"payment_method"`
 }
 
 type DepositResponse struct {
-	ID       string  `json:"id"`
-	Amount   float64 `json:"amount,string"`
-	Currency string  `json:"currency"`
-	PayoutAt Time    `json:"payout_at,string"`
+	Data Deposit `json:"data"`
 }
 
-func (c *Client) ListPaymentMethods(p ...ListHoldsParams) ([]PaymentMethod, error) {
-	// paginationParams := PaginationParams{}
-	// if len(p) > 0 {
-	// 	paginationParams = p[0].Pagination
-	// }
-
-	// return NewCursor(c, "GET", fmt.Sprintf("/payment-methods", id),
-	// 	&paginationParams)
-
-	paymentMethods := []PaymentMethod{}
+func (c *Client) ListPaymentMethods() ([]PaymentMethod, error) {
+	paymentMethods := ListPaymentMethod{}
 
 	_, err := c.Request("GET", "/payment-methods", nil, &paymentMethods)
-	return paymentMethods, err
+	return paymentMethods.Data, err
 }
 
-func (c *Client) Deposit(deposit DepositParams) (DepositResponse, error) {
-	// paginationParams := PaginationParams{}
-	// if len(p) > 0 {
-	// 	paginationParams = p[0].Pagination
-	// }
+func (c *Client) Deposit(accountId string, deposit DepositParams) (DepositResponse, error) {
+	response := DepositResponse{}
 
-	// return NewCursor(c, "GET", fmt.Sprintf("/payment-methods", id),
-	// 	&paginationParams)
+	_, err := c.Request("POST", fmt.Sprintf("/accounts/%s/deposits", accountId), deposit, &response)
+	return response, err
+}
 
-	reponse := DepositResponse{}
+type ListDeposits struct {
+	Data []Deposit `json:"data"`
+}
 
-	_, err := c.Request("POST", "/deposits/payment-method", deposit, &reponse)
-	return reponse, err
+type Deposit struct {
+	Amount    Amount    `json:"amount"`
+	Subtotal  Amount    `json:"subtotal"`
+	Fee       Amount    `json:"fee"`
+	CreatedAt time.Time `json:"created_at,string"`
+	UpdatedAt time.Time `json:"updated_at,string"`
+	PayoutAt  time.Time `json:"payout_at,string"`
+}
+
+type Amount struct {
+	Amount   float64 `json:"amount,string"`
+	Currency string  `json:"currency"`
+}
+
+func (c *Client) ListDeposits(id string) ([]Deposit, error) {
+	var response ListDeposits
+	_, err := c.Request("GET", fmt.Sprintf("/accounts/%s/deposits", id), nil, &response)
+
+	return response.Data, err
 }
