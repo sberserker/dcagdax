@@ -6,7 +6,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -87,13 +89,18 @@ func (c *Client) Request(method string, url string,
 
 	if res.StatusCode != 200 && res.StatusCode != 201 {
 		defer res.Body.Close()
-		coinbaseError := Error{}
-		decoder := json.NewDecoder(res.Body)
-		if err := decoder.Decode(&coinbaseError); err != nil {
+		// coinbaseError := Error{}
+		// decoder := json.NewDecoder(res.Body)
+		// if err := decoder.Decode(&coinbaseError); err != nil {
+		// 	return res, err
+		// }
+		bodyBytes, err := io.ReadAll(res.Body)
+		if err != nil {
 			return res, err
 		}
 
-		return res, error(coinbaseError)
+		mgs := fmt.Sprintf("status: %d, body: %s", res.StatusCode, string(bodyBytes))
+		return res, errors.New(mgs)
 	}
 
 	if result != nil {

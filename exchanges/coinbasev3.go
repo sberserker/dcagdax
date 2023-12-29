@@ -196,7 +196,7 @@ func (c *CoinbaseV3) LastPurchaseTime(coin string, currency string, since time.T
 		return &orders.Orders[0].CreatedTime, nil
 	}
 
-	return &time.Time{}, nil
+	return nil, nil
 }
 
 func (c *CoinbaseV3) GetFiatAccount(currency string) (*Account, error) {
