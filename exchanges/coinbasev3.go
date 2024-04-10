@@ -148,17 +148,17 @@ func (c *CoinbaseV3) Deposit(currency string, amount float64) (*time.Time, error
 		return nil, err
 	}
 
-	paymentMethods, err := c.client.ListPaymentMethods()
+	paymentMethods, err := c.client3.GetPaymentMethods()
 
 	if err != nil {
 		return nil, err
 	}
 
-	var bankAccount *exchange.PaymentMethod = nil
+	var bankAccount *coinbasev3.PaymentMethod = nil
 
-	for i := range paymentMethods {
-		if paymentMethods[i].Type == "ach_bank_account" {
-			bankAccount = &paymentMethods[i]
+	for i := range paymentMethods.PaymentMethods {
+		if paymentMethods.PaymentMethods[i].Type == "ACH" {
+			bankAccount = &paymentMethods.PaymentMethods[i]
 		}
 	}
 

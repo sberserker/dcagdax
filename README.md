@@ -106,7 +106,7 @@ docker run -t -i --name dcagdax -e TZ=America/Los_Angeles  --env-file .env dcagd
 
 Run docker with automatic start
 ```
-docker run -t -i --name dcagdax -e TZ=America/Los_Angeles  --env-file .env --restart unless-stopped dcagdax
+docker run -d --name dcagdax -e TZ=America/Los_Angeles  --env-file .env --restart unless-stopped dcagdax
 ```
 
 Follow container output
