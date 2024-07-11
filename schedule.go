@@ -181,13 +181,14 @@ func (s *gdaxSchedule) Sync() error {
 			return errors.New("No sufficient amount for trade and autofund is disabled. Deposit money to proceed")
 		}
 
-		payoutAt, err := s.fund(needed)
+		_, err = s.fund(needed)
 		if err != nil {
 			return err
 		}
 
 		//calculate when money will available to buy and sleep
-		waitTime := payoutAt.Add(1 * time.Minute).Sub(time.Now())
+		//waitTime := payoutAt.Add(1 * time.Minute).Sub(time.Now())
+		waitTime := 1 * time.Minute
 		if waitTime < 2*time.Minute {
 			s.logger.Infow(
 				"Sleeping for",
@@ -196,7 +197,7 @@ func (s *gdaxSchedule) Sync() error {
 			s.sleepFunc(waitTime)
 		} else {
 			s.logger.Infow(
-				"Deposit money will ba available in. Exiting now",
+				"Deposit money will be available in. Exiting now",
 				"minutes", waitTime.Minutes(),
 			)
 			return nil
